@@ -29,11 +29,12 @@ public class EnhancedMapView extends MapView
 	 *on that of Google and very similar to it, with a full implementation of 
 	 *this class, or build my own implementation.*/
 	private TrackballGestureDetector trackballDetector;
-	//private MotionEvent downMotionEvent,scrollMotionEvent;
+	private MotionEvent downMotionEvent,scrollMotionEvent;
 	private MapViewGestureListener gestureListener;
 	private AnimationFinishCallback animCallback=new AnimationFinishCallback();
 	private GestureKind ongoingGestureKind=GestureKind.UNDETERMINED;
 	private AnimationStage mapAnimationStage=AnimationStage.NOT_ANIMATING;
+	private float lastScrollX,lastScrollY;
 	private int pointerID=-1,numPixelsZoomLevel;
 	private boolean useDefaultGestures=true,isHandlingScale=true;
 	
@@ -46,13 +47,13 @@ public class EnhancedMapView extends MapView
 	{
 		@Override public boolean onSingleTapUp(MotionEvent motionEvent)
 		{ 
-			handleSingleTap(motionEvent);
+			handleSingleTap(motionEvent,getTouchGeoPoint(motionEvent));
 			return true;
 		}
 		
 		@Override public boolean onDoubleTap(MotionEvent motionEvent)
 		{
-			handleDoubleTap(motionEvent);
+			handleDoubleTap(motionEvent,getTouchGeoPoint(motionEvent));
 			return true;
 		}
 		
@@ -64,7 +65,7 @@ public class EnhancedMapView extends MapView
 			touchScrollDetector.onTouchEvent(cancelMotionEvent);
 			if ((useDefaultGestures)&&(isHandlingScale))
 				touchScaleDetector.onTouchEvent(cancelMotionEvent);
-			handleLongPress(motionEvent);
+			handleLongPress(motionEvent,getTouchGeoPoint(motionEvent));
 		}
 		
 		@Override public boolean onScroll(MotionEvent motionEvent1,MotionEvent 
@@ -109,7 +110,9 @@ public class EnhancedMapView extends MapView
 	{
 		@Override public void run()
 		{
-			
+			/*Currently not supported because the trackball detector doesn't 
+			 *supply the coordinates for this type of gesture. A future version 
+			 *may calculate them using the explanation in onTrackballEvent.*/
 		}
 	}
 	
@@ -169,6 +172,10 @@ public class EnhancedMapView extends MapView
 	@Override public boolean onTouchEvent(MotionEvent motionEvent)
 	{
 		if ((!isEnabled())||(!isClickable())) return false;
+		/*Since this function doesn't call the implementation of its baseclass 
+		 *(super), I have to provide any functionality I want to retain by 
+		 *myself, such as delegating the event to the overlays before handling 
+		 *it in the map view.*/
 		Iterator<Overlay> overlaysIterator=getOverlays().iterator();
 		boolean consumed=false;
 		while ((!consumed)&&(overlaysIterator.hasNext()))
@@ -278,31 +285,26 @@ public class EnhancedMapView extends MapView
 		return cancelMotionEvent;
 	}
 	
-	private void handleSingleTap(MotionEvent motionEvent)
+	private void handleSingleTap(MotionEvent motionEvent,GeoPoint geoPoint)
 	{
 		Log.i("MapView","Single Tap");
 		if (mapAnimationStage==AnimationStage.INTERRUPTED)
 			mapAnimationStage=AnimationStage.NOT_ANIMATING;
-		else
+		else if (geoPoint!=null)
 		{
-			GeoPoint tapGeoPoint=getTouchGeoPoint(motionEvent);
-			if (tapGeoPoint!=null)
-			{
-				boolean consumed=false;
-				Iterator<Overlay> overlaysIterator=getOverlays().iterator();
-				while ((!consumed)&&(overlaysIterator.hasNext()))
-					consumed=overlaysIterator.next().onTap(tapGeoPoint,this);
-				if ((!consumed)&&(gestureListener!=null))
-					gestureListener.onSingleTap(this,tapGeoPoint,motionEvent);
-			}
+			boolean consumed=false;
+			Iterator<Overlay> overlaysIterator=getOverlays().iterator();
+			while ((!consumed)&&(overlaysIterator.hasNext()))
+				consumed=overlaysIterator.next().onTap(geoPoint,this);
+			if ((!consumed)&&(gestureListener!=null))
+				gestureListener.onSingleTap(this,geoPoint,motionEvent);
 		}
 	}
 	
-	private void handleDoubleTap(MotionEvent motionEvent)
+	private void handleDoubleTap(MotionEvent motionEvent,GeoPoint geoPoint)
 	{
 		Log.i("MapView","Double Tap, " + mapAnimationStage);
-		GeoPoint tapGeoPoint=getTouchGeoPoint(motionEvent);
-		if (tapGeoPoint==null) return;
+		if (geoPoint==null) return;
 		boolean consumed=false;
 		switch (mapAnimationStage)
 		{
@@ -312,7 +314,7 @@ public class EnhancedMapView extends MapView
 				{
 					Log.i("MapView","Animating");
 					mapAnimationStage=AnimationStage.ANIMATING;
-					getController().animateTo(tapGeoPoint,animCallback);
+					getController().animateTo(geoPoint,animCallback);
 					consumed=true;
 				}
 				break;
@@ -322,27 +324,23 @@ public class EnhancedMapView extends MapView
 				 *layer chooses to handle it*/ 
 				Iterator<Overlay> overlaysIterator=getOverlays().iterator();
 				while ((!consumed)&&(overlaysIterator.hasNext()))
-					consumed=overlaysIterator.next().onTap(tapGeoPoint,this);
+					consumed=overlaysIterator.next().onTap(geoPoint,this);
 				break;
 		}
 		if ((!consumed)&&(gestureListener!=null))
-			gestureListener.onDoubleTap(this,tapGeoPoint,motionEvent);
+			gestureListener.onDoubleTap(this,geoPoint,motionEvent);
 	}
 	
-	private void handleLongPress(MotionEvent motionEvent)
+	private void handleLongPress(MotionEvent motionEvent,GeoPoint geoPoint)
 	{
 		if (mapAnimationStage==AnimationStage.INTERRUPTED)
 			mapAnimationStage=AnimationStage.NOT_ANIMATING;
-		else
+		else if (geoPoint!=null)
 		{
-			GeoPoint pressGeoPoint=getTouchGeoPoint(motionEvent);
-			if (pressGeoPoint!=null)
-			{
-				boolean consumed=false;
-				//TODO: Handle overlays
-				if ((!consumed)&&(gestureListener!=null))
-					gestureListener.onLongPress(this,pressGeoPoint,motionEvent);
-			}
+			boolean consumed=false;
+			//TODO: Handle overlays
+			if ((!consumed)&&(gestureListener!=null))
+				gestureListener.onLongPress(this,geoPoint,motionEvent);
 		}
 	}
 	
@@ -378,5 +376,97 @@ public class EnhancedMapView extends MapView
 			gestureListener.onScroll(this,topLeft,bottomRight,motionEvent1,
 					motionEvent2,distanceX,distanceY);
 		}
+	}
+	
+	@Override public boolean onTrackballEvent(MotionEvent motionEvent)
+	{
+		Iterator<Overlay> overlaysIterator=getOverlays().iterator();
+		boolean consumed=false;
+		while ((!consumed)&&(overlaysIterator.hasNext()))
+			consumed=overlaysIterator.next().onTrackballEvent(motionEvent,this);
+		if (consumed) return true;
+		else
+		{
+			trackballDetector.analyze(motionEvent);
+			/*Since trackball devices have only one button, there are no motion 
+			 *events associated with a pointer index, so we don't have to use 
+			 *the masked value when interpreting them.*/
+			int action=motionEvent.getAction();
+			switch (action)
+			{
+				case MotionEvent.ACTION_DOWN: 
+					if (downMotionEvent==null) downMotionEvent=motionEvent;
+					else if (trackballDetector.isDoubleTap()) 
+					{
+						/*Each input source class has a different meaning to the  
+						 *pointer coordinates in motion events (see the 
+						 *documentation of the MotionEvent and InputDevice
+						 *classes). In the case of the trackball class, the 
+						 *coordinates represent the relative movement, i.e the 
+						 *position difference from the previous event (which 
+						 *means that for down and up events, the coordinates 
+						 *are zeroed), and in device-specific units instead of 
+						 *pixels. Thus, they have to undergo a translation to be 
+						 *compatible with motion events from other input source 
+						 *classes. This can be done by obtaining the motion 
+						 *range for the X and Y axes, and using interpolation to 
+						 *convert the coordinates to be in pixel units, taking 
+						 *density into account (see MotionEvent.getDeviceId,
+						 *InputDevice.getDevice,InputDevice.getMotionRange). 
+						 *Fortunately, the trackball detector already does the 
+						 *conversion for the simple gestures.*/
+						int pointX=Math.round(trackballDetector.getFirstDownX());
+						int pointY=Math.round(trackballDetector.getFirstDownY());
+						GeoPoint geoPoint=getProjection().fromPixels(pointX,pointY);
+						handleDoubleTap(downMotionEvent,geoPoint);
+						downMotionEvent=null;
+					}
+					break;
+				case MotionEvent.ACTION_MOVE:
+					/*Unlike scroll touch events, which always have a down event 
+					 *and an up event that indicate the start and end of the 
+					 *scroll (since the user must stay in contact with the 
+					 *screen during the whole operation), with trackball devices 
+					 *the user can directly perform a scroll, and the button on 
+					 *the device, which is what generates the down and up 
+					 *events, is actually unrelated to the scroll and not needed 
+					 *for it. This makes it a little tricky to know when a 
+					 *scroll sequence ends and another begins. Actually there's 
+					 *no way to determine that a scroll finished because when it 
+					 *happens, the scroll events just stop occurring, and I 
+					 *can't use a timer which resets every time an event occurs 
+					 *because it might catch the next sequence. Therefore, only 
+					 *when there's a scroll event and the state of the device 
+					 *indicates that it's not scrolling at that time, I can know 
+					 *for sure that a new sequence began, and thus the previous 
+					 *sequence has ended.*/
+					if (!trackballDetector.isScroll())
+					{
+						scrollMotionEvent=motionEvent;
+						lastScrollX=0; lastScrollY=0;
+					}
+					else
+					{
+						float distanceX=trackballDetector.scrollX()-lastScrollX;
+						float distanceY=trackballDetector.scrollY()-lastScrollY;
+						handleScroll(scrollMotionEvent,motionEvent,distanceX,
+								distanceY);
+						lastScrollX=trackballDetector.scrollX();
+						lastScrollY=trackballDetector.scrollY();
+					}
+					break;
+				case MotionEvent.ACTION_UP:
+					if (trackballDetector.isTap())
+					{
+						int pointX=Math.round(trackballDetector.getCurrentDownX());
+						int pointY=Math.round(trackballDetector.getCurrentDownY());
+						GeoPoint geoPoint=getProjection().fromPixels(pointX,pointY);
+						handleSingleTap(motionEvent,geoPoint);
+						downMotionEvent=null;
+					}
+					break;
+			} //end switch
+			return true;
+		} //end else
 	}
 }
