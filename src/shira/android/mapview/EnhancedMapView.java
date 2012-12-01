@@ -1,6 +1,9 @@
 package shira.android.mapview;
 
 import android.content.Context;
+import android.graphics.Canvas;
+import android.os.Handler;
+import android.os.Looper;
 import android.util.AttributeSet;
 import android.util.Log;
 import android.view.*;
@@ -15,6 +18,7 @@ public class EnhancedMapView extends MapView
 	private static final char[] operationChars={'4','6','8','2','7','1'};
 	private static final Pattern operationStrPattern;
 	
+	private static final long CHANGE_TIMEOUT=2000;
 	private static final int NUM_DIP_ZOOM_LEVEL=5;
 	private static final int NUM_DIP_SCROLL=5;
 	
@@ -35,12 +39,15 @@ public class EnhancedMapView extends MapView
 	private TrackballGestureDetector trackballDetector;
 	private MotionEvent downMotionEvent,scrollMotionEvent;
 	private MapViewGestureListener gestureListener;
+	private MapViewChangeListener changeListener;
 	private AnimationFinishCallback animCallback=new AnimationFinishCallback();
+	private MapViewChangeTimeoutCallback changeTimeoutCallback;
 	private GestureKind ongoingGestureKind=GestureKind.UNDETERMINED;
 	private AnimationStage mapAnimationStage=AnimationStage.NOT_ANIMATING;
+	private GeoPoint previousMapCenter;
 	private float lastScrollX,lastScrollY;
 	private int pointerID=-1,numPixelsZoomLevel,numPixelsScroll;
-	private int pressedKeyCode=-1,keyRepeatCount;
+	private int pressedKeyCode=-1,keyRepeatCount,previousZoomLevel;
 	private boolean useDefaultInputHandling=true,isHandlingScale=true;
 	
 	private enum GestureKind { UNDETERMINED,SCROLL,LONG_PRESS,SCALE }; 
@@ -121,6 +128,39 @@ public class EnhancedMapView extends MapView
 		}
 	}
 	
+	private class AnimationFinishCallback implements Runnable
+	{
+		@Override public void run() 
+		{ mapAnimationStage=AnimationStage.NOT_ANIMATING; }
+	}
+	
+	private class MapViewChangeTimeoutCallback implements Runnable
+	{
+		@Override public void run()
+		{
+			GeoPoint currentMapCenter=getMapCenter();
+			if (!previousMapCenter.equals(currentMapCenter))
+			{
+				if (changeListener!=null)
+				{
+					changeListener.onPan(EnhancedMapView.this,previousMapCenter,
+							currentMapCenter);
+				}
+				previousMapCenter=currentMapCenter;
+			}
+			int currentZoomLevel=getZoomLevel();
+			if (previousZoomLevel!=currentZoomLevel)
+			{
+				if (changeListener!=null)
+				{
+					changeListener.onZoom(EnhancedMapView.this,previousZoomLevel,
+							currentZoomLevel);
+				}
+				previousZoomLevel=currentZoomLevel;
+			}
+		} //end run
+	} //end MapViewChangeTimeoutCallback
+	
 	static
 	{
 		StringBuilder patternBuilder=new StringBuilder();
@@ -129,12 +169,6 @@ public class EnhancedMapView extends MapView
 			patternBuilder.append(operationChars[index]);
 		patternBuilder.append(']');
 		operationStrPattern=Pattern.compile(patternBuilder.toString());
-	}
-	
-	private class AnimationFinishCallback implements Runnable
-	{
-		@Override public void run() 
-		{ mapAnimationStage=AnimationStage.NOT_ANIMATING; }
 	}
 	
 	public EnhancedMapView(Context context,String apiKey)
@@ -154,17 +188,17 @@ public class EnhancedMapView extends MapView
 	
 	private void initialize() 
 	{ 
-		setClickable(true);
-		setLongClickable(true);
-		setFocusable(true);
-		setFocusableInTouchMode(true);
-		setBuiltInZoomControls(false);
-		setSatellite(true);
-		getController().setZoom(14);
+		setClickable(true); setLongClickable(true); setFocusable(true);
+		setFocusableInTouchMode(true); setBuiltInZoomControls(false);
+		setSatellite(true); getController().setZoom(14);
+		previousMapCenter=getMapCenter(); previousZoomLevel=getZoomLevel();
+		changeTimeoutCallback=new MapViewChangeTimeoutCallback();
+		
 		Context context=getContext();
 		float densityFactor=context.getResources().getDisplayMetrics().density;
 		numPixelsZoomLevel=Math.round(NUM_DIP_ZOOM_LEVEL*densityFactor);
 		numPixelsScroll=Math.round(NUM_DIP_SCROLL*densityFactor);
+		
 		TouchGestureListener touchGestureListener=new TouchGestureListener();
 		touchScrollDetector=new GestureDetector(context,touchGestureListener);
 		touchScrollDetector.setIsLongpressEnabled(false);
@@ -172,6 +206,7 @@ public class EnhancedMapView extends MapView
 		touchLongPressDetector=new GestureDetector(context,touchGestureListener);
 		touchLongPressDetector.setIsLongpressEnabled(true);
 		touchScaleDetector=new ScaleGestureDetector(context,touchGestureListener);
+		
 		//TrackballGestureDetector does not have a public constructor at this time
 		//trackballDetector=new TrackballGestureDetector();
 		//Throws RuntimeException
@@ -186,6 +221,19 @@ public class EnhancedMapView extends MapView
 	{ return gestureListener; }
 	public void setMapViewGestureListener(MapViewGestureListener listener)
 	{ gestureListener=listener; }
+	
+	public MapViewChangeListener getMapViewChangeListener()
+	{ return changeListener; }
+	public void setMapViewChangeListener(MapViewChangeListener listener)
+	{ changeListener=listener; }
+	
+	@Override protected void dispatchDraw(Canvas canvas)
+	{
+		Handler handler=new Handler(Looper.getMainLooper());
+		handler.removeCallbacks(changeTimeoutCallback);
+		super.dispatchDraw(canvas);
+		handler.postDelayed(changeTimeoutCallback,CHANGE_TIMEOUT);
+	}
 	
 	@Override public boolean onKeyDown(int keyCode,KeyEvent keyEvent)
 	{
