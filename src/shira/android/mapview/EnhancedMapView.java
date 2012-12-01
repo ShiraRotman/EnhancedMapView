@@ -3,16 +3,20 @@ package shira.android.mapview;
 import android.content.Context;
 import android.util.AttributeSet;
 import android.util.Log;
-import android.view.GestureDetector;
-import android.view.MotionEvent;
-import android.view.ScaleGestureDetector;
+import android.view.*;
 
 import com.google.android.maps.*;
 import java.util.Iterator;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 public class EnhancedMapView extends MapView
 {
+	private static final char[] operationChars={'4','6','8','2','7','1'};
+	private static final Pattern operationStrPattern;
+	
 	private static final int NUM_DIP_ZOOM_LEVEL=5;
+	private static final int NUM_DIP_SCROLL=5;
 	
 	/*Due to the fact that the touch gesture detectors don't have a common base 
 	 *class/interface, I can't work with them as a group. This leads to 
@@ -35,8 +39,9 @@ public class EnhancedMapView extends MapView
 	private GestureKind ongoingGestureKind=GestureKind.UNDETERMINED;
 	private AnimationStage mapAnimationStage=AnimationStage.NOT_ANIMATING;
 	private float lastScrollX,lastScrollY;
-	private int pointerID=-1,numPixelsZoomLevel;
-	private boolean useDefaultGestures=true,isHandlingScale=true;
+	private int pointerID=-1,numPixelsZoomLevel,numPixelsScroll;
+	private int pressedKeyCode=-1,keyRepeatCount;
+	private boolean useDefaultInputHandling=true,isHandlingScale=true;
 	
 	private enum GestureKind { UNDETERMINED,SCROLL,LONG_PRESS,SCALE }; 
 	private enum AnimationStage { NOT_ANIMATING,ANIMATING,INTERRUPTED };
@@ -63,7 +68,7 @@ public class EnhancedMapView extends MapView
 			MotionEvent cancelMotionEvent=createCancelGestureEvent(
 					motionEvent);
 			touchScrollDetector.onTouchEvent(cancelMotionEvent);
-			if ((useDefaultGestures)&&(isHandlingScale))
+			if ((useDefaultInputHandling)&&(isHandlingScale))
 				touchScaleDetector.onTouchEvent(cancelMotionEvent);
 			handleLongPress(motionEvent,getTouchGeoPoint(motionEvent));
 		}
@@ -116,6 +121,16 @@ public class EnhancedMapView extends MapView
 		}
 	}
 	
+	static
+	{
+		StringBuilder patternBuilder=new StringBuilder();
+		patternBuilder.append('[');
+		for (int index=0;index<operationChars.length;index++)
+			patternBuilder.append(operationChars[index]);
+		patternBuilder.append(']');
+		operationStrPattern=Pattern.compile(patternBuilder.toString());
+	}
+	
 	private class AnimationFinishCallback implements Runnable
 	{
 		@Override public void run() 
@@ -141,12 +156,15 @@ public class EnhancedMapView extends MapView
 	{ 
 		setClickable(true);
 		setLongClickable(true);
+		setFocusable(true);
+		setFocusableInTouchMode(true);
 		setBuiltInZoomControls(false);
 		setSatellite(true);
 		getController().setZoom(14);
 		Context context=getContext();
 		float densityFactor=context.getResources().getDisplayMetrics().density;
 		numPixelsZoomLevel=Math.round(NUM_DIP_ZOOM_LEVEL*densityFactor);
+		numPixelsScroll=Math.round(NUM_DIP_SCROLL*densityFactor);
 		TouchGestureListener touchGestureListener=new TouchGestureListener();
 		touchScrollDetector=new GestureDetector(context,touchGestureListener);
 		touchScrollDetector.setIsLongpressEnabled(false);
@@ -160,14 +178,122 @@ public class EnhancedMapView extends MapView
 		//trackballDetector.registerLongPressCallback(new TrackballLongPressCallback());
 	}
 	
-	public boolean areDefaultGestures() { return useDefaultGestures; }
-	public void useDefaultGestures(boolean useDefaultGestures)
-	{ this.useDefaultGestures=useDefaultGestures; }
+	public boolean isDefaultInputHandling() { return useDefaultInputHandling; }
+	public void useDefaultInputHandling(boolean useDefaultInputHandling)
+	{ this.useDefaultInputHandling=useDefaultInputHandling; }
 	
 	public MapViewGestureListener getMapViewGestureListener()
 	{ return gestureListener; }
 	public void setMapViewGestureListener(MapViewGestureListener listener)
 	{ gestureListener=listener; }
+	
+	@Override public boolean onKeyDown(int keyCode,KeyEvent keyEvent)
+	{
+		Log.i("MapView","Key: " + keyCode);
+		boolean consumed=false;
+		Iterator<Overlay> overlaysIterator=getOverlays().iterator();
+		while ((!consumed)&&(overlaysIterator.hasNext()))
+			consumed=overlaysIterator.next().onKeyDown(keyCode,keyEvent,this);
+		if ((!consumed)&&(useDefaultInputHandling))
+		{
+			int action=keyEvent.getAction();
+			if (action==KeyEvent.ACTION_DOWN)
+			{
+				char pressedKeyChar=getPressedKeyChar(keyEvent);
+				Log.i("MapView","Char: " + pressedKeyChar);
+				consumed=((keyCode==pressedKeyCode)||(isOperationChar(
+						pressedKeyChar)));
+				if ((consumed)&&(!keyEvent.isLongPress()))
+				{
+					pressedKeyCode=keyCode;
+					keyRepeatCount=keyEvent.getRepeatCount();
+				}
+				else { pressedKeyCode=-1; keyRepeatCount=0; }
+			} //end if (ACTION_DOWN)
+			else if (action==KeyEvent.ACTION_MULTIPLE)
+			{
+				if (keyCode!=KeyEvent.KEYCODE_UNKNOWN)
+				{
+					char pressedKeyChar=getPressedKeyChar(keyEvent);
+					consumed=handleInputChar(pressedKeyChar,keyEvent.
+							getRepeatCount());
+				}
+				else
+				{
+					String characters=keyEvent.getCharacters();
+					Matcher matcher=operationStrPattern.matcher(characters);
+					if (matcher.matches()) 
+					{
+						int length=characters.length();
+						for (int index=0;index<length;index++)
+							handleInputChar(characters.charAt(index),1);
+						consumed=true;
+					}
+				}
+				pressedKeyCode=-1; keyRepeatCount=0;
+			} //end if (ACTION_MULTIPLE)
+		} //end if (useDefaultInputHandling)
+		return consumed;
+	}
+	
+	@Override public boolean onKeyUp(int keyCode,KeyEvent keyEvent)
+	{
+		boolean consumed=false;
+		Iterator<Overlay> overlaysIterator=getOverlays().iterator();
+		while ((!consumed)&&(overlaysIterator.hasNext()))
+			consumed=overlaysIterator.next().onKeyUp(keyCode,keyEvent,this);
+		Log.i("MapView","Up: " + keyCode);
+		if ((!consumed)&&(keyCode==pressedKeyCode)&&(!keyEvent.isCanceled()))
+			handleInputChar(getPressedKeyChar(keyEvent),keyRepeatCount+1);
+		pressedKeyCode=-1; keyRepeatCount=0;
+		return consumed;		
+	}
+	
+	private boolean isOperationChar(char character)
+	{
+		boolean found=false; int index=0;
+		while ((!found)&&(index<operationChars.length))
+			if (character==operationChars[index]) found=true; else index++;
+		return found;
+	}
+	
+	private char getPressedKeyChar(KeyEvent keyEvent)
+	{
+		int keyCode=keyEvent.getKeyCode();
+		InputDevice inputDevice=keyEvent.getDevice();
+		KeyCharacterMap keyCharMap=inputDevice.getKeyCharacterMap();
+		return keyCharMap.getNumber(keyCode);
+	}
+	
+	private boolean handleInputChar(char keyChar,int keyRepeatCount)
+	{
+		Log.i("MapView","Handling: " + keyChar);
+		MapController controller=getController();
+		switch (keyChar)
+		{
+			case '4': 
+				controller.scrollBy(-numPixelsScroll*keyRepeatCount,0);
+				break;
+			case '6':
+				Log.i("MapView","Scrolling: " + keyRepeatCount);
+				controller.scrollBy(numPixelsScroll*keyRepeatCount,0);
+				break;
+			case '2':
+				controller.scrollBy(0,-numPixelsScroll*keyRepeatCount);
+				break;
+			case '8':
+				controller.scrollBy(0,numPixelsScroll*keyRepeatCount);
+				break;
+			case '1':
+				controller.setZoom(getZoomLevel()+keyRepeatCount);
+				break;
+			case '7':
+				controller.setZoom(getZoomLevel()-keyRepeatCount);
+				break;
+			default: return false;
+		}
+		return true;
+	}
 	
 	@Override public boolean onTouchEvent(MotionEvent motionEvent)
 	{
@@ -202,7 +328,7 @@ public class EnhancedMapView extends MapView
 					ongoingGestureKind=GestureKind.SCROLL;
 					touchScrollDetector.onTouchEvent(motionEvent);
 				}*/
-				if (useDefaultGestures) 
+				if (useDefaultInputHandling) 
 					isHandlingScale=touchScaleDetector.onTouchEvent(motionEvent);
 				//if (ongoingGestureKind==GestureKind.UNDETERMINED)
 				//downMotionEvent=motionEvent;
@@ -217,14 +343,14 @@ public class EnhancedMapView extends MapView
 							motionEvent);
 					if (isLongClickable()) 
 						touchLongPressDetector.onTouchEvent(cancelMotionEvent);
-					if ((useDefaultGestures)&&(isHandlingScale))
+					if ((useDefaultInputHandling)&&(isHandlingScale))
 						touchScaleDetector.onTouchEvent(cancelMotionEvent);
 				}
 				updateGestureDetector(motionEvent);
 				break;
 			case MotionEvent.ACTION_POINTER_DOWN:
 				if ((ongoingGestureKind==GestureKind.UNDETERMINED)&&
-						(useDefaultGestures))
+						(useDefaultInputHandling))
 				{
 					ongoingGestureKind=GestureKind.SCALE;
 					/*touchScaleDetector.onTouchEvent(downMotionEvent);
@@ -245,7 +371,7 @@ public class EnhancedMapView extends MapView
 							motionEvent);
 					if (isLongClickable()) 
 						touchLongPressDetector.onTouchEvent(cancelMotionEvent);
-					if ((useDefaultGestures)&&(isHandlingScale))
+					if ((useDefaultInputHandling)&&(isHandlingScale))
 						touchScaleDetector.onTouchEvent(cancelMotionEvent);
 				}
 				updateGestureDetector(motionEvent);
@@ -310,7 +436,7 @@ public class EnhancedMapView extends MapView
 		{
 			case NOT_ANIMATING:
 				//TODO: Handle overlays with a double tap
-				if ((!consumed)&&(useDefaultGestures))
+				if ((!consumed)&&(useDefaultInputHandling))
 				{
 					Log.i("MapView","Animating");
 					mapAnimationStage=AnimationStage.ANIMATING;
@@ -362,7 +488,7 @@ public class EnhancedMapView extends MapView
 	{
 		if (mapAnimationStage==AnimationStage.INTERRUPTED)
 			mapAnimationStage=AnimationStage.NOT_ANIMATING;
-		if (useDefaultGestures)
+		if (useDefaultInputHandling)
 			getController().scrollBy(Math.round(distanceX),Math.round(distanceY));
 		else if (gestureListener!=null)
 		{
@@ -411,10 +537,10 @@ public class EnhancedMapView extends MapView
 						 *classes. This can be done by obtaining the motion 
 						 *range for the X and Y axes, and using interpolation to 
 						 *convert the coordinates to be in pixel units, taking 
-						 *density into account (see MotionEvent.getDeviceId,
-						 *InputDevice.getDevice,InputDevice.getMotionRange). 
-						 *Fortunately, the trackball detector already does the 
-						 *conversion for the simple gestures.*/
+						 *density into account (see MotionEvent.getDevice,
+						 *InputDevice.getMotionRange). Fortunately, the 
+						 *trackball detector already does the conversion for the 
+						 *simple gestures.*/
 						int pointX=Math.round(trackballDetector.getFirstDownX());
 						int pointY=Math.round(trackballDetector.getFirstDownY());
 						GeoPoint geoPoint=getProjection().fromPixels(pointX,pointY);
