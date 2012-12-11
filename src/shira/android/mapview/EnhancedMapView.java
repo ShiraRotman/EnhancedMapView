@@ -2,25 +2,31 @@ package shira.android.mapview;
 
 import android.content.Context;
 import android.graphics.Canvas;
+import android.graphics.Rect;
 import android.os.Handler;
 import android.os.Looper;
 import android.util.AttributeSet;
 import android.util.Log;
+import android.util.SparseArray;
 import android.view.*;
 
 import com.google.android.maps.*;
-import java.util.Iterator;
+import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 public class EnhancedMapView extends MapView
 {
+	//Can't be final since it's not assigned in the constructors
+	private static float densityFactor; 
 	private static final char[] operationChars={'4','6','8','2','7','1'};
 	private static final Pattern operationStrPattern;
+	static final Map<ControlType,MapControlBuilder> controlBuilders; 
 	
 	private static final long CHANGE_TIMEOUT=2000;
 	private static final int NUM_DIP_ZOOM_LEVEL=5;
 	private static final int NUM_DIP_SCROLL=5;
+	private static final int CONTROL_SPACING_DIP=5;
 	
 	/*Due to the fact that the touch gesture detectors don't have a common base 
 	 *class/interface, I can't work with them as a group. This leads to 
@@ -45,13 +51,30 @@ public class EnhancedMapView extends MapView
 	private GestureKind ongoingGestureKind=GestureKind.UNDETERMINED;
 	private AnimationStage mapAnimationStage=AnimationStage.NOT_ANIMATING;
 	private GeoPoint previousMapCenter;
+	private SparseArray<ControlViewData> mapControls;
 	private float lastScrollX,lastScrollY;
 	private int pointerID=-1,numPixelsZoomLevel,numPixelsScroll;
 	private int pressedKeyCode=-1,keyRepeatCount,previousZoomLevel;
+	private int controlSpacingPixels;
 	private boolean useDefaultInputHandling=true,isHandlingScale=true;
 	
 	private enum GestureKind { UNDETERMINED,SCROLL,LONG_PRESS,SCALE }; 
 	private enum AnimationStage { NOT_ANIMATING,ANIMATING,INTERRUPTED };
+	private enum LayeringDirection { FORWARD,BACKWARD,CENTRALIZED };
+	public enum ControlType { PAN,ZOOM,ROTATE,MAP_TYPE,STREET_VIEW };
+	
+	public enum ControlAlignment 
+	{ 
+		/*REMOVE,*/UNKNOWN,TOP_LEFT,TOP_CENTER,TOP_RIGHT,LEFT_TOP,LEFT_CENTER,
+		LEFT_BOTTOM,BOTTOM_LEFT,BOTTOM_CENTER,BOTTOM_RIGHT,RIGHT_TOP,
+		RIGHT_CENTER,RIGHT_BOTTOM;
+	}
+	
+	private static class ControlViewData
+	{
+		public View control;
+		public ControlAlignment alignment;
+	}
 	
 	private class TouchGestureListener extends GestureDetector.
 			SimpleOnGestureListener implements ScaleGestureDetector.
@@ -169,6 +192,8 @@ public class EnhancedMapView extends MapView
 			patternBuilder.append(operationChars[index]);
 		patternBuilder.append(']');
 		operationStrPattern=Pattern.compile(patternBuilder.toString());
+		
+		controlBuilders=new HashMap<ControlType,MapControlBuilder>();
 	}
 	
 	public EnhancedMapView(Context context,String apiKey)
@@ -195,9 +220,11 @@ public class EnhancedMapView extends MapView
 		changeTimeoutCallback=new MapViewChangeTimeoutCallback();
 		
 		Context context=getContext();
-		float densityFactor=context.getResources().getDisplayMetrics().density;
+		densityFactor=context.getResources().getDisplayMetrics().density;
 		numPixelsZoomLevel=Math.round(NUM_DIP_ZOOM_LEVEL*densityFactor);
 		numPixelsScroll=Math.round(NUM_DIP_SCROLL*densityFactor);
+		controlSpacingPixels=Math.round(CONTROL_SPACING_DIP*densityFactor);
+		mapControls=new SparseArray<ControlViewData>();
 		
 		TouchGestureListener touchGestureListener=new TouchGestureListener();
 		touchScrollDetector=new GestureDetector(context,touchGestureListener);
@@ -226,6 +253,14 @@ public class EnhancedMapView extends MapView
 	{ return changeListener; }
 	public void setMapViewChangeListener(MapViewChangeListener listener)
 	{ changeListener=listener; }
+	
+	/*@Override protected void measureChildren(int widthMeasureSpec,int 
+			heightMeasureSpec)
+	{
+		super.measureChildren(widthMeasureSpec,heightMeasureSpec);
+		Log.i("MapView","Dimensions: " + widthMeasureSpec + "," + 
+				heightMeasureSpec);
+	}*/
 	
 	@Override protected void dispatchDraw(Canvas canvas)
 	{
@@ -643,4 +678,389 @@ public class EnhancedMapView extends MapView
 			return true;
 		} //end else
 	}
+	
+	public void setMapControl(ControlType controlType,Map<String,Object> 
+			properties)
+	{ setMapControl(controlType,properties,ControlAlignment.UNKNOWN,View.VISIBLE); }
+		
+	public void setMapControl(ControlType controlType,Map<String,Object> 
+			properties,ControlAlignment alignment,int visibility)
+	{
+		if ((getWidth()==0)||(getHeight()==0))
+			throw new IllegalStateException("The map controls cannot be set " +
+					"before the map view is ready!");
+		if ((visibility!=View.VISIBLE)&&(visibility!=View.INVISIBLE)&&
+				(visibility!=View.GONE))
+			throw new IllegalArgumentException("The control's visibility must be " +
+					"one of the allowed values for the visibility of a view!");
+		ControlViewData controlViewData=mapControls.get(controlType.ordinal());
+		if (controlViewData==null) controlViewData=new ControlViewData();
+		/*else if (alignment==ControlAlignment.REMOVE)
+			throw new IllegalArgumentException("The control does not exist on " +
+					"the map and thus cannot be removed!");*/
+		View existingControl=controlViewData.control;
+		MapControlBuilder controlBuilder=controlBuilders.get(controlType);
+		View createdControl=controlBuilder.buildControl(properties,
+				existingControl);
+		//int controlWidth=createdControl.getMeasuredWidth();
+		int controlWidth=Math.round(controlBuilder.getMinimumWidth(properties)*
+				densityFactor);
+		int controlHeight=Math.round(controlBuilder.getMinimumHeight(properties)*
+				densityFactor);
+		if (alignment==ControlAlignment.UNKNOWN) 
+			alignment=controlBuilder.getDefaultAlignment();
+		
+		/*Check if rearranging controls, i.e moving them to make space for the 
+		 *new / modified control, and/or to cover the space of the control if it 
+		 *has been moved, is needed*/
+		LayoutParams layoutParams=null; int prevWidth=0,prevHeight=0; 
+		boolean rearrange=false;
+		if (existingControl!=null)
+		{
+			layoutParams=(LayoutParams)existingControl.getLayoutParams();
+			prevWidth=layoutParams.width; prevHeight=layoutParams.height;
+			if (alignment!=controlViewData.alignment) rearrange=true;
+			else
+			{
+				if (existingControl!=createdControl)
+				{
+					if ((prevWidth!=controlWidth)||(prevHeight!=controlHeight))
+						rearrange=true;
+				}
+				int prevVisibility=existingControl.getVisibility();
+				if ((!rearrange)&&(visibility!=prevVisibility)&&((visibility==
+						View.GONE)||(prevVisibility==View.GONE)))
+					rearrange=true;
+			}
+		} //end if existingControl...
+		
+		/*Find the farthest control from the start position of its alignment, or 
+		 *the control itself if it already exists and hasn't changed alignment*/ 
+		/*LayoutParams layoutParams; int prevWidth=0,prevHeight=0;
+		if (alignment==controlViewData.alignment)
+		{
+			layoutParams=(LayoutParams)existingControl.getLayoutParams();
+			prevWidth=layoutParams.width; prevHeight=layoutParams.height;
+		}
+		else layoutParams=null;*/
+		if ((existingControl==null)||(rearrange)) /*&&(alignment!=ControlAlignment.
+				REMOVE))*/
+		{
+			boolean isHorizontalChange=isHorizontalAlignment(alignment);
+			LayeringDirection direction=getAlignmentDirection(alignment);
+			String alignmentStr=alignment.name(); int startPosition;
+			if ((alignmentStr.endsWith("LEFT"))||(alignmentStr.endsWith("TOP")))
+				startPosition=0;
+			else if (alignmentStr.endsWith("RIGHT")) startPosition=getWidth();
+			else if (alignmentStr.endsWith("BOTTOM")) startPosition=getHeight();
+			else if (isHorizontalChange) startPosition=getWidth()/2;
+			else startPosition=getHeight()/2;
+			/*List<View> alignedControls;
+			if (alignment==controlViewData.alignment)
+				alignedControls=new LinkedList<View>();
+			else alignedControls=null;*/
+			int maxDistance=0,maxDistanceOtherSide=0;
+			int size=mapControls.size(); boolean foundControl=false;
+			for (int counter=0;counter<size;counter++)
+			{
+				ControlViewData traversedViewData=mapControls.valueAt(counter);
+				View traversedControl=traversedViewData.control;
+				ControlAlignment traversedAlignment=traversedViewData.
+						alignment;
+				LayoutParams traversedLayout=(LayoutParams)traversedControl.
+						getLayoutParams();
+				if (traversedAlignment==alignment)
+				{
+					if (!foundControl)
+					{
+						if (traversedControl!=existingControl)
+						{
+							/*Rect bounds=new Rect();	
+							traversedControl.getDrawingRect(bounds);*/
+							int right=traversedLayout.x+traversedLayout.width;
+							int bottom=traversedLayout.y+traversedLayout.height;
+							int positionDifference=0;
+							int positionDifferenceOtherSide=0;
+							switch (direction)
+							{
+								case FORWARD:
+									positionDifference=(isHorizontalChange?right:
+											bottom)-startPosition;
+									break;
+								case BACKWARD:
+									positionDifference=(isHorizontalChange?
+											traversedLayout.x:traversedLayout.y)-
+											startPosition;
+									break;
+								case CENTRALIZED:
+									int position1,position2;
+									if (isHorizontalChange)
+									{ position1=traversedLayout.x; position2=right; }
+									else 
+									{ position1=traversedLayout.y; position2=bottom; }
+									int distance1=position1-startPosition;
+									int distance2=position2-startPosition;
+									Log.i("MapView","Distances: " + distance1 + 
+											" " + distance2);
+									if (Math.abs(distance1)>Math.abs(distance2))
+									{
+										positionDifference=distance1;
+										if (Math.signum(distance1)!=Math.signum(distance2))
+											positionDifferenceOtherSide=distance2;
+									}
+									else
+									{
+										positionDifference=distance2;
+										if (Math.signum(distance1)!=Math.signum(distance2))
+											positionDifferenceOtherSide=distance1;
+									}
+									break;
+							} //end switch
+							Log.i("MapView","Difference: " + positionDifference);
+							if ((Math.signum(positionDifference)!=Math.signum(
+									maxDistance))&&(maxDistance!=0))
+							{
+								int tempDifference=positionDifference;
+								positionDifference=positionDifferenceOtherSide;
+								positionDifferenceOtherSide=tempDifference;
+							}
+							if (Math.abs(positionDifference)>Math.abs(maxDistance))
+								maxDistance=positionDifference;
+							if (Math.abs(positionDifferenceOtherSide)>Math.abs(
+									maxDistanceOtherSide))
+								maxDistanceOtherSide=positionDifferenceOtherSide;
+						} //end if traversedControl!=existingControl 
+						else foundControl=true;
+					} //end if !foundControl
+					/*if (alignedControls!=null) 
+						alignedControls.add(traversedControl);*/
+				} //end if traversedAlignment==alignment
+				else if (traversedControl!=existingControl)
+				{
+					String traversedAlignmentStr=traversedAlignment.name();
+					if ((!isHorizontalChange)&&((traversedAlignmentStr.
+							startsWith("TOP"))||(traversedAlignmentStr.
+							startsWith("BOTTOM")))&&((maxDistance+startPosition)<
+							traversedLayout.height))
+					{
+						maxDistance=traversedLayout.height-startPosition;
+						/*if (direction==LayeringDirection.BACKWARD)
+							maxDistance*=-1;*/
+					}
+				}
+			} //end for
+			Log.i("MapView","Final distances: " + maxDistance + " " + 
+					maxDistanceOtherSide);
+			if ((maxDistanceOtherSide!=0)&&(Math.abs(maxDistanceOtherSide)<
+					Math.abs(maxDistance)))
+				maxDistance=maxDistanceOtherSide;
+			
+			//Calculate the new rectangle for the control and update the layout
+			if (!foundControl)
+			{
+				Log.i("MapView","Position: " + startPosition);
+				int positionCoord=maxDistance+startPosition;
+				int spacing=controlSpacingPixels;
+				switch (direction)
+				{
+					case BACKWARD: spacing*=-1; break;
+					case CENTRALIZED: spacing*=Math.signum(maxDistance); break;
+				}
+				positionCoord+=spacing;
+				int positionX,positionY;
+				if (isHorizontalChange) 
+				{
+					positionY=(alignmentStr.startsWith("TOP")?controlSpacingPixels:
+							getHeight()-controlSpacingPixels-controlHeight);
+					positionX=positionCoord;
+					if ((direction==LayeringDirection.BACKWARD)||(maxDistance<0)) 
+						positionX-=controlWidth;
+					else if ((direction==LayeringDirection.CENTRALIZED)&&
+							(maxDistance==0))
+						positionX-=controlWidth/2;
+				}
+				else 
+				{
+					positionX=(alignmentStr.startsWith("LEFT")?controlSpacingPixels:
+							getWidth()-controlSpacingPixels-controlWidth);
+					positionY=positionCoord;
+					if ((direction==LayeringDirection.BACKWARD)||(maxDistance<0)) 
+						positionY-=controlHeight;
+					else if ((direction==LayeringDirection.CENTRALIZED)&&
+							(maxDistance==0))
+						positionY-=controlHeight/2;
+				}
+				/*int alignmentParam;
+				if ((direction==LayeringDirection.CENTRALIZED)&&(maxDistance==0))
+				{
+					alignmentParam=(isHorizontalChange?LayoutParams.
+							CENTER_HORIZONTAL:LayoutParams.CENTER_VERTICAL);
+				}
+				else alignmentParam=LayoutParams.TOP_LEFT;*/
+				layoutParams=new LayoutParams(controlWidth,controlHeight,
+						positionX,positionY,LayoutParams.TOP_LEFT);
+			} //end if !foundControl
+			else if ((layoutParams.width!=controlWidth)||(layoutParams.height!=
+					controlHeight))
+			{
+				layoutParams.width=controlWidth;
+				layoutParams.height=controlHeight;
+			}
+			
+			//Rearrange existing controls to occupy the change in the layout
+			if (rearrange)
+			{
+				boolean isPrevHorizontalChange=isHorizontalAlignment(
+						controlViewData.alignment);
+				int moveAmount=(isPrevHorizontalChange?prevWidth:prevHeight); 
+				boolean expanded=false;
+				if (alignment==controlViewData.alignment)
+				{
+					if (visibility!=existingControl.getVisibility())
+					{
+						if (visibility==View.GONE) expanded=false;
+						else if (existingControl.getVisibility()==View.GONE)
+						{
+							moveAmount=(isPrevHorizontalChange?controlWidth:
+									controlHeight);
+							expanded=true;
+						}
+					}
+					else
+					{
+						moveAmount=(isPrevHorizontalChange?controlWidth-
+								prevWidth:controlHeight-prevHeight);
+						if (moveAmount>0) expanded=true; 
+						else
+						{
+							moveAmount*=-1;
+							expanded=false;
+						}
+					}
+				} //end if alignment...
+				else expanded=false;
+				LayeringDirection prevDirection=getAlignmentDirection(
+						controlViewData.alignment);
+				for (int counter=0;counter<size;counter++)
+				{
+					ControlViewData traversedViewData=mapControls.get(counter);
+					if ((traversedViewData.control!=existingControl)&&
+							(traversedViewData.alignment==controlViewData.
+							alignment))
+					{
+						moveLayoutControl(existingControl,traversedViewData.
+								control,isPrevHorizontalChange,prevDirection,
+								expanded,moveAmount);
+					}
+				}
+			} //end if rearrange
+		} //end if existingControl==null || rearrange
+		
+		//Update the control in its parent view
+		Log.i("MapView","Layout: " + layoutParams.x + "," + layoutParams.y + 
+				" " + layoutParams.width + "," + layoutParams.height);
+		Log.i("MapView","Alignment: " + alignment.name());
+		//if (alignment==ControlAlignment.REMOVE) removeView(existingControl);
+		if ((existingControl==null)||(prevWidth!=layoutParams.width)||
+				(prevHeight!=layoutParams.height))
+			createdControl.setLayoutParams(layoutParams);
+		createdControl.setVisibility(visibility);
+		if (existingControl!=createdControl)
+		{
+			if (existingControl!=null) removeView(existingControl);
+			addView(createdControl,layoutParams);
+			controlViewData.control=createdControl;
+			controlBuilder.registerListeners(this,createdControl);
+		}
+		controlViewData.alignment=alignment;
+		if (mapControls.get(controlType.ordinal())==null)
+			mapControls.put(controlType.ordinal(),controlViewData);
+	} //end setMapControl
+	
+	private boolean isHorizontalAlignment(ControlAlignment alignment)
+	{ 
+		String alignmentStr=alignment.name();
+		return ((alignmentStr.startsWith("TOP"))||(alignmentStr.startsWith(
+				"BOTTOM")));
+	}
+	
+	private LayeringDirection getAlignmentDirection(ControlAlignment alignment)
+	{
+		String alignmentStr=alignment.name();
+		if (alignmentStr.endsWith("CENTER")) 
+			return LayeringDirection.CENTRALIZED;
+		else if ((alignmentStr.endsWith("LEFT"))||(alignmentStr.endsWith("TOP")))
+			return LayeringDirection.FORWARD;
+		else return LayeringDirection.BACKWARD;
+	}
+	
+	private void moveLayoutControl(View affectingControl,View affectedControl,
+			boolean isHorizontalChange,LayeringDirection direction,boolean 
+			expanded,int moveAmount)
+	{
+		int moveSign=0;
+		if (direction==LayeringDirection.FORWARD) moveSign=1;
+		else if (direction==LayeringDirection.BACKWARD) moveSign=-1;
+		LayoutParams affectingLayoutParams=(LayoutParams)affectingControl.
+				getLayoutParams();
+		LayoutParams affectedLayoutParams=(LayoutParams)affectedControl.
+				getLayoutParams();
+		int dimension; boolean canMove=false,testMove=false;
+		int affectingControlStart,affectingControlEnd,affectedControlStart;
+		if (isHorizontalChange)
+		{
+			dimension=getWidth();
+			//moveAmount=(amount==0?affectingControl.getMeasuredWidth():amount);
+			affectingControlStart=affectingLayoutParams.x;
+			Log.i("MapView","Start: " + affectingLayoutParams.x);
+			affectingControlEnd=affectingLayoutParams.x+affectingLayoutParams.width;
+			affectedControlStart=affectedLayoutParams.x;
+		}
+		else
+		{
+			dimension=getHeight();
+			//moveAmount=(amount==0?affectingControl.getMeasuredHeight():amount);
+			affectingControlStart=affectingLayoutParams.y;
+			affectingControlEnd=affectingLayoutParams.y+affectingLayoutParams.height;
+			affectedControlStart=affectedLayoutParams.y;
+		}
+		if (direction==LayeringDirection.CENTRALIZED)
+		{
+			int middle=dimension/2;
+			int affectingStartDistance=affectingControlStart-middle;
+			int affectingEndDistance=affectingControlEnd-middle;
+			int signum=(int)Math.signum(affectingStartDistance);
+			Log.i("MapView","Affecting: " + affectingStartDistance + " " + 
+					affectingEndDistance);
+			if (signum==Math.signum(affectingEndDistance))
+			{
+				//Not central control
+				if (signum==Math.signum(affectedControlStart-middle))
+				{
+					testMove=true;
+					moveSign=signum;
+				}
+			}
+			else
+			{
+				canMove=true;
+				moveAmount/=2;
+				moveSign=(int)(Math.signum(affectedControlStart-middle));
+			}
+		} //end if direction...
+		else testMove=true;
+		moveAmount+=controlSpacingPixels;
+		Log.i("MapView","Checking: " + affectingControlStart + " and " + 
+				affectedControlStart + " with sign " + moveSign);
+		if ((canMove)||((testMove)&&(affectingControlStart*moveSign<
+				affectedControlStart*moveSign)))
+		{
+			if (!expanded) moveSign*=-1;
+			moveAmount*=moveSign;
+			Log.i("MapView","Moving by " + moveAmount);
+			if (isHorizontalChange) affectedLayoutParams.x+=moveAmount;
+			else affectedLayoutParams.y+=moveAmount;
+			affectedControl.setLayoutParams(affectedLayoutParams);
+		}
+	} //end moveLayoutControl
 }
