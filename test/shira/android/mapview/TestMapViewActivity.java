@@ -1,6 +1,7 @@
 package shira.android.mapview;
 
 import java.util.Map;
+import java.util.HashMap;
 
 import shira.android.mapview.EnhancedMapView.ControlAlignment;
 import shira.android.mapview.EnhancedMapView.ControlType;
@@ -29,7 +30,7 @@ public class TestMapViewActivity extends MapActivity
 		
 		@Override
 		public View buildControl(Map<String, Object> properties,View 
-				existingControl) 
+				existingControl,EnhancedMapView mapView) 
 		{ return new Button(TestMapViewActivity.this); }
 
 		@Override public int getMinimumWidth(Map<String,Object> properties) 
@@ -44,9 +45,9 @@ public class TestMapViewActivity extends MapActivity
 		super.onCreate(savedInstanceState);
 		String apiKey=getResources().getString(R.string.google_maps_api_key);
 		enhancedMapView=new EnhancedMapView(this,apiKey);
-		DummyControlBuilder dummyBuilder=new DummyControlBuilder();
+		/*DummyControlBuilder dummyBuilder=new DummyControlBuilder();
 		for (ControlType controlType:ControlType.values())
-			EnhancedMapView.controlBuilders.put(controlType,dummyBuilder);
+			EnhancedMapView.controlBuilders.put(controlType,dummyBuilder);*/
 		ViewTreeObserver.OnGlobalLayoutListener listener=new 
 				ViewTreeObserver.OnGlobalLayoutListener()
 		{
@@ -54,7 +55,7 @@ public class TestMapViewActivity extends MapActivity
 			{
 				enhancedMapView.getViewTreeObserver().removeGlobalOnLayoutListener(
 						this);
-				testMapControlBasic();
+				testMapTypeControl();
 			}
 		};
 		enhancedMapView.getViewTreeObserver().addOnGlobalLayoutListener(listener);
@@ -66,7 +67,7 @@ public class TestMapViewActivity extends MapActivity
 	
 	private void testChangeListener()
 	{
-		enhancedMapView.setMapViewChangeListener(new MapViewChangeListener() 
+		enhancedMapView.addChangeListener(new MapViewChangeListener() 
 		{	
 			@Override 
 			public void onZoom(EnhancedMapView mapView,int oldZoomLevel,
@@ -77,6 +78,9 @@ public class TestMapViewActivity extends MapActivity
 			public void onPan(EnhancedMapView mapView,GeoPoint oldCenter,
 					GeoPoint newCenter) 
 			{ Log.i("Test","Pan"); }
+
+			@Override 
+			public void onTileChange(EnhancedMapView mapView,boolean isSatellite) { }
 		});
 	}
 	
@@ -100,5 +104,14 @@ public class TestMapViewActivity extends MapActivity
 		//enhancedMapView.setMapControl(ControlType.PAN,null,alignment,View.GONE);
 		enhancedMapView.setMapControl(ControlType.MAP_TYPE,null,alignment,View.VISIBLE);
 		enhancedMapView.setMapControl(ControlType.ROTATE,null,alignment,View.GONE);
+	}
+	
+	private void testMapTypeControl()
+	{ 
+		Map<String,Object> properties=new HashMap<String,Object>();
+		properties.put(MapControlDefsUtils.CONTROL_STYLE_PROP_KEY,
+				MapControlDefsUtils.MapTypeControlStyle.HORIZONTAL_BAR);
+		enhancedMapView.setMapControl(ControlType.MAP_TYPE,properties);
+				//ControlAlignment.LEFT_TOP,View.VISIBLE);
 	}
 }

@@ -2,7 +2,6 @@ package shira.android.mapview;
 
 import android.content.Context;
 import android.graphics.Canvas;
-import android.graphics.Rect;
 import android.os.Handler;
 import android.os.Looper;
 import android.util.AttributeSet;
@@ -45,7 +44,7 @@ public class EnhancedMapView extends MapView
 	private TrackballGestureDetector trackballDetector;
 	private MotionEvent downMotionEvent,scrollMotionEvent;
 	private MapViewGestureListener gestureListener;
-	private MapViewChangeListener changeListener;
+	private List<MapViewChangeListener> changeListeners;
 	private AnimationFinishCallback animCallback=new AnimationFinishCallback();
 	private MapViewChangeTimeoutCallback changeTimeoutCallback;
 	private GestureKind ongoingGestureKind=GestureKind.UNDETERMINED;
@@ -164,7 +163,7 @@ public class EnhancedMapView extends MapView
 			GeoPoint currentMapCenter=getMapCenter();
 			if (!previousMapCenter.equals(currentMapCenter))
 			{
-				if (changeListener!=null)
+				for (MapViewChangeListener changeListener:changeListeners)
 				{
 					changeListener.onPan(EnhancedMapView.this,previousMapCenter,
 							currentMapCenter);
@@ -174,7 +173,7 @@ public class EnhancedMapView extends MapView
 			int currentZoomLevel=getZoomLevel();
 			if (previousZoomLevel!=currentZoomLevel)
 			{
-				if (changeListener!=null)
+				for (MapViewChangeListener changeListener:changeListeners)
 				{
 					changeListener.onZoom(EnhancedMapView.this,previousZoomLevel,
 							currentZoomLevel);
@@ -194,6 +193,7 @@ public class EnhancedMapView extends MapView
 		operationStrPattern=Pattern.compile(patternBuilder.toString());
 		
 		controlBuilders=new HashMap<ControlType,MapControlBuilder>();
+		controlBuilders.put(ControlType.MAP_TYPE,new MapTypeControlBuilder());
 	}
 	
 	public EnhancedMapView(Context context,String apiKey)
@@ -215,12 +215,15 @@ public class EnhancedMapView extends MapView
 	{ 
 		setClickable(true); setLongClickable(true); setFocusable(true);
 		setFocusableInTouchMode(true); setBuiltInZoomControls(false);
-		setSatellite(true); getController().setZoom(14);
+		setSatellite(true,false); getController().setZoom(14);
 		previousMapCenter=getMapCenter(); previousZoomLevel=getZoomLevel();
 		changeTimeoutCallback=new MapViewChangeTimeoutCallback();
+		changeListeners=new LinkedList<MapViewChangeListener>();
 		
 		Context context=getContext();
 		densityFactor=context.getResources().getDisplayMetrics().density;
+		//Log.i("MapView","Density: " + densityFactor);
+		MapControlDefsUtils.densityFactor=densityFactor;
 		numPixelsZoomLevel=Math.round(NUM_DIP_ZOOM_LEVEL*densityFactor);
 		numPixelsScroll=Math.round(NUM_DIP_SCROLL*densityFactor);
 		controlSpacingPixels=Math.round(CONTROL_SPACING_DIP*densityFactor);
@@ -249,10 +252,21 @@ public class EnhancedMapView extends MapView
 	public void setMapViewGestureListener(MapViewGestureListener listener)
 	{ gestureListener=listener; }
 	
-	public MapViewChangeListener getMapViewChangeListener()
-	{ return changeListener; }
-	public void setMapViewChangeListener(MapViewChangeListener listener)
-	{ changeListener=listener; }
+	public void addChangeListener(MapViewChangeListener listener)
+	{
+		if (listener==null)
+			throw new NullPointerException("The listener to register must be " + 
+					"non-null!");
+		changeListeners.add(listener);
+	}
+	
+	public void removeChangeListener(MapViewChangeListener listener)
+	{
+		if (listener==null)
+			throw new NullPointerException("The listener to unregister must " + 
+					"be non-null!");
+		changeListeners.remove(listener);
+	}
 	
 	/*@Override protected void measureChildren(int widthMeasureSpec,int 
 			heightMeasureSpec)
@@ -261,6 +275,19 @@ public class EnhancedMapView extends MapView
 		Log.i("MapView","Dimensions: " + widthMeasureSpec + "," + 
 				heightMeasureSpec);
 	}*/
+	
+	@Override public void setSatellite(boolean on)
+	{ setSatellite(on,true); }
+	
+	void setSatellite(boolean on,boolean notifyListeners)
+	{
+		super.setSatellite(on);
+		if (notifyListeners)
+		{
+			for (MapViewChangeListener changeListener:changeListeners)
+				changeListener.onTileChange(this,on);
+		}
+	}
 	
 	@Override protected void dispatchDraw(Canvas canvas)
 	{
@@ -701,12 +728,10 @@ public class EnhancedMapView extends MapView
 		View existingControl=controlViewData.control;
 		MapControlBuilder controlBuilder=controlBuilders.get(controlType);
 		View createdControl=controlBuilder.buildControl(properties,
-				existingControl);
+				existingControl,this);
 		//int controlWidth=createdControl.getMeasuredWidth();
-		int controlWidth=Math.round(controlBuilder.getMinimumWidth(properties)*
-				densityFactor);
-		int controlHeight=Math.round(controlBuilder.getMinimumHeight(properties)*
-				densityFactor);
+		int controlWidth=controlBuilder.getMinimumWidth(properties);
+		int controlHeight=controlBuilder.getMinimumHeight(properties);
 		if (alignment==ControlAlignment.UNKNOWN) 
 			alignment=controlBuilder.getDefaultAlignment();
 		
@@ -967,7 +992,13 @@ public class EnhancedMapView extends MapView
 		createdControl.setVisibility(visibility);
 		if (existingControl!=createdControl)
 		{
-			if (existingControl!=null) removeView(existingControl);
+			if (existingControl!=null)
+			{
+				removeView(existingControl);
+				MapViewChangeListener listener=(MapViewChangeListener)
+						existingControl.getTag(R.id.change_listener);
+				removeChangeListener(listener);
+			}
 			addView(createdControl,layoutParams);
 			controlViewData.control=createdControl;
 			controlBuilder.registerListeners(this,createdControl);

@@ -6,7 +6,7 @@ import java.util.Map;
 interface MapControlBuilder 
 {
 	public abstract View buildControl(Map<String,Object> properties,View 
-			existingControl);
+			existingControl,EnhancedMapView mapView);
 	public abstract void registerListeners(EnhancedMapView mapView,View control);
 	public abstract int getMinimumWidth(Map<String,Object> properties);
 	public abstract int getMinimumHeight(Map<String,Object> properties);
