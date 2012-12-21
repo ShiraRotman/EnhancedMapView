@@ -992,13 +992,17 @@ public class EnhancedMapView extends MapView
 		createdControl.setVisibility(visibility);
 		if (existingControl!=createdControl)
 		{
+			ViewsActivationManager activationManager=ViewsActivationManager.
+					getInstance();
 			if (existingControl!=null)
 			{
+				activationManager.unregisterView(existingControl);				
 				removeView(existingControl);
 				MapViewChangeListener listener=(MapViewChangeListener)
 						existingControl.getTag(R.id.change_listener);
 				removeChangeListener(listener);
 			}
+			activationManager.registerView(createdControl);
 			addView(createdControl,layoutParams);
 			controlViewData.control=createdControl;
 			controlBuilder.registerListeners(this,createdControl);
