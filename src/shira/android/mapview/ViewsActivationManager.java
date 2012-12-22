@@ -162,21 +162,21 @@ class ViewsActivationManager
 					releaseActivationResources(viewActivationData);
 					activateView(view,viewActivationData);
 				}
-				else
+				/*else
 				{
 					Log.i("MapView","Disabling");
 					//view.setEnabled(false);
 					if (view instanceof ViewGroup)
 						changeViewGroupResponsiveness((ViewGroup)view,false);					
 					//view.setOnTouchListener(activationViewListener);
-				}
+				}*/
 			} //end else if
 			else
 			{
-				Log.i("MapView","Enabling");
+				Log.i("MapView","Enabled");
 				//view.setEnabled(true);
-				if (view instanceof ViewGroup)
-					changeViewGroupResponsiveness((ViewGroup)view,true);
+				/*if (view instanceof ViewGroup)
+					changeViewGroupResponsiveness((ViewGroup)view,true);*/
 				handleActiveView(view,viewActivationData);
 			}
 		}
@@ -223,7 +223,7 @@ class ViewsActivationManager
 					"registered for activation management!");
 		ViewActivationData viewActivationData=new ViewActivationData();
 		viewsActivationMap.put(view,viewActivationData);
-		view.setOnTouchListener(activationViewListener);
+		registerTouchListenerHierarchy(view,activationViewListener);
 		if (view.isEnabled()) handleActiveView(view,viewActivationData); 
 		//else view.setOnTouchListener(activationViewListener);
 	}
@@ -237,7 +237,7 @@ class ViewsActivationManager
 		if (viewActivationData==null)
 			throw new IllegalArgumentException("This view is not registered " +
 					"for activation management!");
-		view.setOnTouchListener(null);
+		registerTouchListenerHierarchy(view,null);
 		ObjectAnimator activationAnimator=viewActivationData.activationAnimator;
 		if (activationAnimator!=null)
 		{
@@ -262,24 +262,26 @@ class ViewsActivationManager
 		}
 	}
 	
-	private void changeViewGroupResponsiveness(ViewGroup viewGroup,boolean 
-			responsive)
+	private void registerTouchListenerHierarchy(View view,View.OnTouchListener 
+			listener)
 	{
-		/*The clickability of the root view group can't be changed, because then
-		 *it won't be able to catch the touch event that's supposed to activate 
-		 *it (if it's inactive). In case there are portions of the view group 
-		 *that handle clicks, they won't get the event because the touch event 
-		 *listener will consume it first.*/
-		View.OnTouchListener listener=(responsive?activationViewListener:null);
-		int numChildren=viewGroup.getChildCount();
-		for (int counter=0;counter<numChildren;counter++)
+		//View.OnTouchListener listener=(responsive?activationViewListener:null);
+		view.setOnTouchListener(listener);
+		if (view instanceof ViewGroup)
 		{
-			View childView=viewGroup.getChildAt(counter);
-			childView.setClickable(responsive);
-			childView.setLongClickable(responsive); //Needed?
-			childView.setOnTouchListener(listener);
-			if (childView instanceof ViewGroup)
-				changeViewGroupResponsiveness((ViewGroup)childView,responsive);
+			ViewGroup viewGroup=(ViewGroup)view;
+			int numChildren=viewGroup.getChildCount();
+			for (int counter=0;counter<numChildren;counter++)
+			{
+				View childView=viewGroup.getChildAt(counter);
+				/*childView.setClickable(responsive);
+				childView.setLongClickable(responsive); //Needed?*/
+				//childView.setEnabled(responsive);
+				//childView.setFocusable(responsive);
+				childView.setOnTouchListener(listener);
+				//if (childView instanceof ViewGroup)
+				registerTouchListenerHierarchy(childView,listener);
+			}
 		}
 	}
 	
