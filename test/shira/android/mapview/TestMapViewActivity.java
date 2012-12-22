@@ -56,6 +56,7 @@ public class TestMapViewActivity extends MapActivity
 				enhancedMapView.getViewTreeObserver().removeGlobalOnLayoutListener(
 						this);
 				testMapTypeControl();
+				testZoomControl();
 			}
 		};
 		enhancedMapView.getViewTreeObserver().addOnGlobalLayoutListener(listener);
@@ -113,5 +114,13 @@ public class TestMapViewActivity extends MapActivity
 				MapControlDefsUtils.MapTypeControlStyle.HORIZONTAL_BAR);
 		enhancedMapView.setMapControl(ControlType.MAP_TYPE,properties);
 				//ControlAlignment.LEFT_TOP,View.VISIBLE);
+	}
+	
+	private void testZoomControl()
+	{
+		Map<String,Object> properties=new HashMap<String,Object>();
+		properties.put(MapControlDefsUtils.CONTROL_STYLE_PROP_KEY,
+				MapControlDefsUtils.ZoomControlStyle.LARGE);
+		enhancedMapView.setMapControl(ControlType.ZOOM,properties);
 	}
 }

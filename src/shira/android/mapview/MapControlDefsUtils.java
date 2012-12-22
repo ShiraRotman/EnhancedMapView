@@ -11,6 +11,7 @@ public final class MapControlDefsUtils
 	static float densityFactor;
 	
 	public enum MapTypeControlStyle { DROPDOWN_MENU,HORIZONTAL_BAR };
+	public enum ZoomControlStyle { SMALL,LARGE };
 	
 	public enum MapType 
 	{ 

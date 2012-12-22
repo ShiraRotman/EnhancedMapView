@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources xmlns:android="http://schemas.android.com/apk/res/android">
     <item type="id" name="change_listener"/>
+    <item type="id" name="control_listener"/>
     
     <item type="id" name="was_canceled_indication"/>
     <item type="id" name="remove_view_indication"/>

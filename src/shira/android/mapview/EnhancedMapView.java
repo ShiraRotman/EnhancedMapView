@@ -194,6 +194,7 @@ public class EnhancedMapView extends MapView
 		
 		controlBuilders=new HashMap<ControlType,MapControlBuilder>();
 		controlBuilders.put(ControlType.MAP_TYPE,new MapTypeControlBuilder());
+		controlBuilders.put(ControlType.ZOOM,new ZoomControlBuilder());
 	}
 	
 	public EnhancedMapView(Context context,String apiKey)
@@ -988,7 +989,10 @@ public class EnhancedMapView extends MapView
 		//if (alignment==ControlAlignment.REMOVE) removeView(existingControl);
 		if ((existingControl==null)||(prevWidth!=layoutParams.width)||
 				(prevHeight!=layoutParams.height))
+		{
 			createdControl.setLayoutParams(layoutParams);
+			controlBuilder.registerListeners(this,createdControl);
+		}
 		createdControl.setVisibility(visibility);
 		if (existingControl!=createdControl)
 		{
@@ -1000,12 +1004,14 @@ public class EnhancedMapView extends MapView
 				removeView(existingControl);
 				MapViewChangeListener listener=(MapViewChangeListener)
 						existingControl.getTag(R.id.change_listener);
-				removeChangeListener(listener);
+				if (listener!=null) removeChangeListener(listener);
+				//The other cases requiring registration were addressed above
+				controlBuilder.registerListeners(this,createdControl);
 			}
 			activationManager.registerView(createdControl);
 			addView(createdControl,layoutParams);
 			controlViewData.control=createdControl;
-			controlBuilder.registerListeners(this,createdControl);
+			//controlBuilder.registerListeners(this,createdControl);
 		}
 		controlViewData.alignment=alignment;
 		if (mapControls.get(controlType.ordinal())==null)
