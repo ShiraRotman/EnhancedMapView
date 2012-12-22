@@ -33,9 +33,12 @@ class ViewsActivationManager
 	private ActivationAnimatorListener animatorListener;
 	
 	private enum CallbackState { PENDING,STOPPED,RUNNING,FINISHED };
+	private enum OperationsEndState { NOTHING_ENDED,TOUCH_ENDED,ANIMATION_ENDED };
 	
 	private static class ViewActivationData
 	{
+		public OperationsEndState operationsEndState=OperationsEndState.
+				NOTHING_ENDED;
 		public UntouchedViewTimeoutCallback untouchedTimeoutCallback;
 		public ObjectAnimator activationAnimator;
 	}
@@ -79,22 +82,23 @@ class ViewsActivationManager
 	{
 		@Override public boolean onTouch(View view,MotionEvent event)
 		{
-			boolean consumed;
-			if (event.getActionMasked()==MotionEvent.ACTION_DOWN)
+			View rootView=view; //boolean rootTouched=true;
+			ViewActivationData viewActivationData=viewsActivationMap.get(view);
+			while (viewActivationData==null)
+			{
+				rootView=(View)rootView.getParent();
+				viewActivationData=viewsActivationMap.get(rootView);
+			}
+			int actionMasked=event.getActionMasked(); boolean consumed;
+			if (actionMasked==MotionEvent.ACTION_DOWN)
 			{
 				Log.i("MapView","Touched");
 				//view.setOnTouchListener(null);
-				View rootView=view; //boolean rootTouched=true;
-				ViewActivationData viewActivationData=viewsActivationMap.
-						get(view);
-				while (viewActivationData==null)
-				{
-					rootView=(View)rootView.getParent();
-					viewActivationData=viewsActivationMap.get(rootView);
-				}
 				UntouchedViewTimeoutCallback untouchedCallback=viewActivationData.
 						untouchedTimeoutCallback;
-				consumed=(untouchedCallback==null);
+				consumed=((untouchedCallback==null)&&(viewActivationData.
+						operationsEndState==OperationsEndState.NOTHING_ENDED));
+				Log.i("MapView","Consumed: " + consumed);
 				view.setTag(R.id.touch_consumed_indication,consumed);
 				if (viewActivationData.activationAnimator!=null)
 					viewActivationData.activationAnimator.cancel();
@@ -105,12 +109,38 @@ class ViewsActivationManager
 					Handler handler=new Handler(Looper.getMainLooper());
 					handler.removeCallbacks(untouchedCallback); //Not working!!!
 					releaseActivationResources(viewActivationData);
-					handleActiveView(rootView,viewActivationData);
+					//handleActiveView(rootView,viewActivationData);
+					viewActivationData.operationsEndState=OperationsEndState.
+							ANIMATION_ENDED;
 				}
-				else activateView(rootView,viewActivationData);
+				else if (viewActivationData.operationsEndState==OperationsEndState.
+						NOTHING_ENDED)
+					activateView(rootView,viewActivationData);
+				//viewActivationData.canStartActiveState=false;
+				Log.i("MapView","State down: " + viewActivationData.
+						operationsEndState);
 			} //end if
 			else 
 			{
+				Log.i("MapView","Action: " + actionMasked);
+				if ((actionMasked==MotionEvent.ACTION_UP)||(actionMasked==
+						MotionEvent.ACTION_CANCEL))
+				{
+					switch (viewActivationData.operationsEndState)
+					{
+						case NOTHING_ENDED:
+							viewActivationData.operationsEndState=OperationsEndState.
+									TOUCH_ENDED;
+							break;
+						case ANIMATION_ENDED:
+							viewActivationData.operationsEndState=OperationsEndState.
+									NOTHING_ENDED;
+							handleActiveView(rootView,viewActivationData);
+							break;
+					}
+				}
+				Log.i("MapView","State not down: " + viewActivationData.
+						operationsEndState);
 				consumed=((Boolean)view.getTag(R.id.touch_consumed_indication)).
 						booleanValue();
 			}
@@ -136,6 +166,8 @@ class ViewsActivationManager
 			UntouchedViewTimeoutCallback untouchedCallback=viewActivationData.
 					untouchedTimeoutCallback;
 			releaseActivationResources(viewActivationData);
+			Log.i("MapView","State animation: " + viewActivationData.
+					operationsEndState);
 			boolean removeView;
 			Object removeViewWrapper=view.getTag(R.id.remove_view_indication);
 			if (removeViewWrapper!=null)
@@ -177,7 +209,17 @@ class ViewsActivationManager
 				//view.setEnabled(true);
 				/*if (view instanceof ViewGroup)
 					changeViewGroupResponsiveness((ViewGroup)view,true);*/
-				handleActiveView(view,viewActivationData);
+				switch (viewActivationData.operationsEndState)
+				{
+					case NOTHING_ENDED:
+						viewActivationData.operationsEndState=OperationsEndState.
+								ANIMATION_ENDED;
+						break;
+					case TOUCH_ENDED:
+						viewActivationData.operationsEndState=OperationsEndState.
+								NOTHING_ENDED;
+						handleActiveView(view,viewActivationData);
+				}
 			}
 		}
 	}
@@ -224,7 +266,8 @@ class ViewsActivationManager
 		ViewActivationData viewActivationData=new ViewActivationData();
 		viewsActivationMap.put(view,viewActivationData);
 		registerTouchListenerHierarchy(view,activationViewListener);
-		if (view.isEnabled()) handleActiveView(view,viewActivationData); 
+		//if (view.isEnabled()) 
+		handleActiveView(view,viewActivationData); 
 		//else view.setOnTouchListener(activationViewListener);
 	}
 	
