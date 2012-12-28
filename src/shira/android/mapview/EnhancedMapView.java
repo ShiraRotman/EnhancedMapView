@@ -2,6 +2,7 @@ package shira.android.mapview;
 
 import android.content.Context;
 import android.graphics.Canvas;
+import android.graphics.Matrix;
 import android.os.Handler;
 import android.os.Looper;
 import android.util.AttributeSet;
@@ -20,6 +21,7 @@ public class EnhancedMapView extends MapView
 	private static float densityFactor; 
 	private static final char[] operationChars={'4','6','8','2','7','1'};
 	private static final Pattern operationStrPattern;
+	//private static final Matrix identityMatrix=new Matrix();
 	static final Map<ControlType,MapControlBuilder> controlBuilders; 
 	
 	private static final long CHANGE_TIMEOUT=2000;
@@ -49,6 +51,11 @@ public class EnhancedMapView extends MapView
 	private MapViewChangeTimeoutCallback changeTimeoutCallback;
 	private GestureKind ongoingGestureKind=GestureKind.UNDETERMINED;
 	private AnimationStage mapAnimationStage=AnimationStage.NOT_ANIMATING;
+	private MapRotationController rotationController;
+	private Matrix rotationMatrix=new Matrix();
+	/*Temporary matrix for calculations, stored globally to save creating and 
+	 *destroying a new object each time*/
+	//private Matrix calculationMatrix=new Matrix();
 	private GeoPoint previousMapCenter;
 	private SparseArray<ControlViewData> mapControls;
 	private float lastScrollX,lastScrollY;
@@ -81,12 +88,14 @@ public class EnhancedMapView extends MapView
 	{
 		@Override public boolean onSingleTapUp(MotionEvent motionEvent)
 		{ 
+			rotateMotionEvent(motionEvent);
 			handleSingleTap(motionEvent,getTouchGeoPoint(motionEvent));
 			return true;
 		}
 		
 		@Override public boolean onDoubleTap(MotionEvent motionEvent)
 		{
+			rotateMotionEvent(motionEvent);
 			handleDoubleTap(motionEvent,getTouchGeoPoint(motionEvent));
 			return true;
 		}
@@ -99,6 +108,7 @@ public class EnhancedMapView extends MapView
 			touchScrollDetector.onTouchEvent(cancelMotionEvent);
 			if ((useDefaultInputHandling)&&(isHandlingScale))
 				touchScaleDetector.onTouchEvent(cancelMotionEvent);
+			rotateMotionEvent(motionEvent);
 			handleLongPress(motionEvent,getTouchGeoPoint(motionEvent));
 		}
 		
@@ -290,11 +300,99 @@ public class EnhancedMapView extends MapView
 		}
 	}
 	
+	public MapRotationController getRotationController()
+	{
+		if (rotationController!=null) return rotationController;
+		else
+		{
+			throw new IllegalStateException("This map view does not support " +
+					"rotation!");
+		}
+	}
+	
+	@Override protected void onAttachedToWindow()
+	{
+		try { rotationController=new MapRotationController(this); }
+		catch (IllegalArgumentException argException) { }
+	}
+	
+	@Override protected void onDetachedFromWindow()
+	{ rotationController=null; }
+	
+	@Override 
+	protected void onLayout(boolean changed,int left,int top,int right,int bottom)
+	{
+		if (right==0) return; //Sometimes the dimensions passed might be 0
+		/*{
+			left=((Number)getTag(R.id.view_left_coord)).intValue();
+			top=((Number)getTag(R.id.view_top_coord)).intValue();
+			//right+=left; bottom+=top;
+		}*/
+		Log.i("MapView","Stretched: " + left + "," + top);
+		Log.i("MapView","End: " + right + "," + bottom);
+		View parent=(View)getParent();
+		int parentWidth=parent.getWidth(),parentHeight=parent.getHeight();
+		int size=mapControls.size();
+		for (int index=0;index<size;index++)
+		{
+			ControlViewData controlViewData=mapControls.valueAt(index);
+			String alignmentName=controlViewData.alignment.name();
+			int alignmentSeparator=alignmentName.indexOf("_");
+			String alignmentNameX=alignmentName.substring(0,alignmentSeparator);
+			String alignmentNameY=alignmentName.substring(alignmentSeparator+1);
+			if ((alignmentNameX.equals("TOP"))||(alignmentNameY.equals("BOTTOM")))
+			{
+				String alignmentTemp=alignmentNameX;
+				alignmentNameX=alignmentNameY;
+				alignmentNameY=alignmentTemp;
+			}
+			int offsetX=calcOffsetX(alignmentNameX,left,right,parentWidth);
+			int offsetY=calcOffsetY(alignmentNameY,top,bottom,parentHeight);
+			Log.i("MapView","Offsets: " + offsetX + "," + offsetY);
+			LayoutParams layoutParams=(LayoutParams)controlViewData.control.
+					getLayoutParams();
+			int childLeft=layoutParams.x+offsetX,childTop=layoutParams.y+offsetY;
+			Log.i("MapView","Start: " + childLeft + "," + childTop);
+			controlViewData.control.layout(childLeft,childTop,childLeft+
+					layoutParams.width,childTop+layoutParams.height);
+		}
+	}
+	
+	private int calcOffsetX(String alignmentName,int left,int right,int 
+			parentWidth)
+	{
+		if (alignmentName.equals("LEFT")) return -left;
+		else if (alignmentName.equals("RIGHT")) return parentWidth-right;
+		else return 0;
+	}
+	
+	private int calcOffsetY(String alignmentName,int top,int bottom,int 
+			parentHeight)
+	{
+		if (alignmentName.equals("TOP")) return -top;
+		else if (alignmentName.equals("BOTTOM")) return parentHeight-bottom;
+		else return 0;
+	}
+	
 	@Override protected void dispatchDraw(Canvas canvas)
 	{
 		Handler handler=new Handler(Looper.getMainLooper());
 		handler.removeCallbacks(changeTimeoutCallback);
-		super.dispatchDraw(canvas);
+		if (rotationController!=null)
+		{
+			float rotationDegrees=rotationController.getMapRotation();
+			//Log.i("MapView","Degrees: " + rotationDegrees);
+			canvas.getMatrix(rotationMatrix); //Store for transformation use
+			if (rotationDegrees>0)
+			{
+				int saveCount=canvas.save(Canvas.MATRIX_SAVE_FLAG);
+				canvas.rotate(-rotationDegrees,getWidth()/2,getHeight()/2);
+				super.dispatchDraw(canvas);
+				canvas.restoreToCount(saveCount);
+			}
+			else super.dispatchDraw(canvas);
+		}
+		else super.dispatchDraw(canvas);
 		handler.postDelayed(changeTimeoutCallback,CHANGE_TIMEOUT);
 	}
 	
@@ -578,6 +676,25 @@ public class EnhancedMapView extends MapView
 			//TODO: Handle overlays
 			if ((!consumed)&&(gestureListener!=null))
 				gestureListener.onLongPress(this,geoPoint,motionEvent);
+		}
+	}
+	
+	private void rotateMotionEvent(MotionEvent motionEvent)
+	{
+		if (rotationController!=null)
+		{
+			//TODO: Test and fix when working on the overlays
+			float rotationDegrees=rotationController.getMapRotation();
+			if (rotationDegrees>0)
+			//if (!rotationMatrix.isIdentity())
+			{
+				if (rotationMatrix==null) rotationMatrix=new Matrix();
+				else rotationMatrix.reset();
+				rotationMatrix.setRotate(rotationDegrees,getWidth()/2,
+						getHeight()/2);
+				//May contain translation components
+				//motionEvent.transform(rotationMatrix);
+			}
 		}
 	}
 	

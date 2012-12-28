@@ -9,8 +9,11 @@ import shira.android.mapview.EnhancedMapView.ControlType;
 import android.os.Bundle;
 import android.util.Log;
 import android.view.View;
+import android.view.ViewGroup;
 import android.view.ViewTreeObserver;
 import android.widget.Button;
+import android.widget.FrameLayout;
+import android.widget.LinearLayout.LayoutParams;
 
 import com.google.android.maps.GeoPoint;
 import com.google.android.maps.MapActivity;
@@ -45,6 +48,7 @@ public class TestMapViewActivity extends MapActivity
 		super.onCreate(savedInstanceState);
 		String apiKey=getResources().getString(R.string.google_maps_api_key);
 		enhancedMapView=new EnhancedMapView(this,apiKey);
+		//enhancedMapView.setRotation(180);
 		/*DummyControlBuilder dummyBuilder=new DummyControlBuilder();
 		for (ControlType controlType:ControlType.values())
 			EnhancedMapView.controlBuilders.put(controlType,dummyBuilder);*/
@@ -57,10 +61,33 @@ public class TestMapViewActivity extends MapActivity
 						this);
 				testMapTypeControl();
 				testZoomControl();
+				testRotationAnimation();
 			}
 		};
 		enhancedMapView.getViewTreeObserver().addOnGlobalLayoutListener(listener);
-		setContentView(enhancedMapView);
+		RotationView rotationView=new RotationView(this);
+		rotationView.addView(enhancedMapView);
+		FrameLayout rootLayout=new FrameLayout(this);
+		rootLayout.addView(rotationView);
+		Button testButton=new Button(this);
+		testButton.setText("Test");
+		testButton.setOnClickListener(new View.OnClickListener() 
+		{
+			@Override public void onClick(View view) 
+			{
+				enhancedMapView.getRotationController().animateRotation(45,
+						false,null,5000);
+			}
+		});
+		ViewGroup.LayoutParams layoutParams=new ViewGroup.LayoutParams(
+				ViewGroup.LayoutParams.WRAP_CONTENT,ViewGroup.LayoutParams.
+				WRAP_CONTENT);
+		rootLayout.addView(testButton,layoutParams);
+		setContentView(rootLayout);
+		//Log.i("MapView","Rotating");
+		/*rotationView.setPivotX(rotationView.getWidth()/2);
+		rotationView.setPivotY(rotationView.getHeight()/2);*/
+		//rotationView.setRotationDegrees(45);
 		//testChangeListener();
 	}
 	
@@ -83,6 +110,12 @@ public class TestMapViewActivity extends MapActivity
 			@Override 
 			public void onTileChange(EnhancedMapView mapView,boolean isSatellite) { }
 		});
+	}
+	
+	private void testRotationAnimation()
+	{ 
+		enhancedMapView.getRotationController().animateRotation(225,true,
+				null,10000);
 	}
 	
 	private void testMapControlBasic()
