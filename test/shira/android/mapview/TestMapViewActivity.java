@@ -9,11 +9,10 @@ import shira.android.mapview.EnhancedMapView.ControlType;
 import android.os.Bundle;
 import android.util.Log;
 import android.view.View;
-import android.view.ViewGroup;
+//import android.view.ViewGroup;
 import android.view.ViewTreeObserver;
 import android.widget.Button;
 import android.widget.FrameLayout;
-import android.widget.LinearLayout.LayoutParams;
 
 import com.google.android.maps.GeoPoint;
 import com.google.android.maps.MapActivity;
@@ -59,9 +58,10 @@ public class TestMapViewActivity extends MapActivity
 			{
 				enhancedMapView.getViewTreeObserver().removeGlobalOnLayoutListener(
 						this);
-				testMapTypeControl();
+				/*testMapTypeControl();
 				testZoomControl();
-				testRotationAnimation();
+				testRotationAnimation();*/
+				enhancedMapView.setMapControl(ControlType.PAN,null);
 			}
 		};
 		enhancedMapView.getViewTreeObserver().addOnGlobalLayoutListener(listener);
@@ -79,10 +79,10 @@ public class TestMapViewActivity extends MapActivity
 						false,null,5000);
 			}
 		});
-		ViewGroup.LayoutParams layoutParams=new ViewGroup.LayoutParams(
+		/*ViewGroup.LayoutParams layoutParams=new ViewGroup.LayoutParams(
 				ViewGroup.LayoutParams.WRAP_CONTENT,ViewGroup.LayoutParams.
 				WRAP_CONTENT);
-		rootLayout.addView(testButton,layoutParams);
+		rootLayout.addView(testButton,layoutParams);*/
 		setContentView(rootLayout);
 		//Log.i("MapView","Rotating");
 		/*rotationView.setPivotX(rotationView.getWidth()/2);
