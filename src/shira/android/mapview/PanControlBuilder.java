@@ -29,7 +29,7 @@ class DirectionPad extends View
 	public static final int HORIZONTAL_DIRECTION_MASK=3; //0011
 	public static final int VERTICAL_DIRECTION_MASK=12; //1100*/
 	
-	public static final long TOUCH_REPEAT_TIME_ELAPSE=100;
+	public static final long TOUCH_REPEAT_TIME_ELAPSE=41;
 	private static final double DIRECTION_THRESHOLD=0.15;
 	
 	private static final int ARROW_COLOR=0xFF5D86BF;
@@ -288,7 +288,7 @@ class PanControlBuilder implements MapControlBuilder
 	
 	private static final int CONTROL_WIDTH=50;
 	private static final int CONTROL_HEIGHT=CONTROL_WIDTH;
-	private static final float PAN_AMOUNT=5f;
+	private static final float PAN_AMOUNT=3f;
 	
 	private static int controlWidth;
 	private static int controlHeight;
@@ -348,6 +348,7 @@ class PanControlBuilder implements MapControlBuilder
 						panningValuesHolders[1].setFloatValues(0,directionY*
 								panAmount);
 					}
+					lastAnimatedXValue=0; lastAnimatedYValue=0;
 					//panningAnimator.start();
 					mapView.getController().scrollBy(directionX*panAmount,
 							directionY*panAmount);
@@ -377,6 +378,7 @@ class PanControlBuilder implements MapControlBuilder
 				float panningY=((Float)animator.getAnimatedValue("panningY")).
 						floatValue()-lastAnimatedYValue;
 				controller.scrollBy(Math.round(panningX),Math.round(panningY));
+				lastAnimatedXValue=panningX; lastAnimatedYValue=panningY;
 			}
 		});
 	}
