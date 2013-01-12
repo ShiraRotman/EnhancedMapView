@@ -206,6 +206,7 @@ public class EnhancedMapView extends MapView
 		controlBuilders.put(ControlType.MAP_TYPE,new MapTypeControlBuilder());
 		controlBuilders.put(ControlType.ZOOM,new ZoomControlBuilder());
 		controlBuilders.put(ControlType.PAN,new PanControlBuilder());
+		controlBuilders.put(ControlType.ROTATE,new RotateControlBuilder());
 	}
 	
 	public EnhancedMapView(Context context,String apiKey)
@@ -280,6 +281,8 @@ public class EnhancedMapView extends MapView
 		changeListeners.remove(listener);
 	}
 	
+	List<MapViewChangeListener> getChangeListeners() { return changeListeners; }
+	
 	/*@Override protected void measureChildren(int widthMeasureSpec,int 
 			heightMeasureSpec)
 	{
@@ -300,6 +303,8 @@ public class EnhancedMapView extends MapView
 				changeListener.onTileChange(this,on);
 		}
 	}
+	
+	public boolean supportsRotation() { return (rotationController!=null); }
 	
 	public MapRotationController getRotationController()
 	{
@@ -1122,12 +1127,17 @@ public class EnhancedMapView extends MapView
 				removeView(existingControl);
 				MapViewChangeListener listener=(MapViewChangeListener)
 						existingControl.getTag(R.id.change_listener);
-				if (listener!=null) removeChangeListener(listener);
+				if (listener!=null)
+				{
+					removeChangeListener(listener);
+					existingControl.setTag(R.id.change_listener,null);
+				}
 				//The other cases requiring registration were addressed above
 				controlBuilder.registerListeners(this,createdControl);
 			}
-			//activationManager.registerView(createdControl);
+			activationManager.registerView(createdControl);
 			addView(createdControl,layoutParams);
+			//createdControl.requestLayout();
 			controlViewData.control=createdControl;
 			//controlBuilder.registerListeners(this,createdControl);
 		}

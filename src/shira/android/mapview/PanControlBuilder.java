@@ -286,8 +286,8 @@ class PanControlBuilder implements MapControlBuilder
 	private static final long PANNING_ANIMATION_DURATION=DirectionPad.
 			TOUCH_REPEAT_TIME_ELAPSE;
 	
-	private static final int CONTROL_WIDTH=50;
-	private static final int CONTROL_HEIGHT=CONTROL_WIDTH;
+	static final int CONTROL_WIDTH=50;
+	static final int CONTROL_HEIGHT=CONTROL_WIDTH;
 	private static final float PAN_AMOUNT=3f;
 	
 	private static int controlWidth;

@@ -12,9 +12,11 @@ public class MapRotationController
 {
 	public static final long DEF_ROTATION_DURATION_MILLIS=300;
 	
+	private EnhancedMapView mapView;
 	private RotationView rotationView;
 	private ObjectAnimator rotationAnimator;
 	private RotationAnimatorListener animatorListener;
+	private float oldRotationDegrees;
 	
 	public static interface RotationAnimationListener
 	{
@@ -46,6 +48,8 @@ public class MapRotationController
 				animationListener.onRotationEnd(MapRotationController.this,
 						canceled);
 			}
+			notifyRotationListeners();
+			oldRotationDegrees=rotationView.getRotationDegrees();
 			canceled=false;
 		}
 	}
@@ -60,7 +64,9 @@ public class MapRotationController
 			throw new IllegalArgumentException("The supplied map view does " +
 					"not support rotation! In order to support it, the map " +
 					"view must be contained inside a RotationView.");
+		this.mapView=mapView;
 		rotationView=(RotationView)parent;
+		oldRotationDegrees=rotationView.getRotationDegrees();
 	}
 	
 	public float getMapRotation() { return rotationView.getRotationDegrees(); }
@@ -69,7 +75,23 @@ public class MapRotationController
 	{
 		if ((rotationAnimator!=null)&&(rotationAnimator.isRunning()))
 			rotationAnimator.cancel();
+		rotationDegrees%=360;
+		if (rotationDegrees<0) rotationDegrees+=360;
 		rotationView.setRotationDegrees(rotationDegrees);
+		if (rotationDegrees!=oldRotationDegrees)
+		{
+			notifyRotationListeners();
+			oldRotationDegrees=rotationDegrees;
+		}
+	}
+	
+	private void notifyRotationListeners()
+	{
+		for (MapViewChangeListener listener:mapView.getChangeListeners())
+		{
+			listener.onRotate(mapView,oldRotationDegrees,rotationView.
+					getRotationDegrees());
+		}
 	}
 	
 	public void animateRotation(float rotationDegrees)
@@ -87,6 +109,14 @@ public class MapRotationController
 	
 	public void animateRotation(float rotationDegrees,boolean counterClockwise,
 			RotationAnimationListener animationListener,long duration)
+	{
+		animateRotation(rotationDegrees,counterClockwise,animationListener,
+				duration,false);
+	}
+	
+	public void animateRotation(float rotationDegrees,boolean counterClockwise,
+			RotationAnimationListener animationListener,long duration,
+			boolean cancelRunningAnimation)
 	{
 		rotationDegrees%=360;
 		if (rotationDegrees<0) rotationDegrees+=360;
@@ -116,7 +146,7 @@ public class MapRotationController
 		}
 		else
 		{
-			if (rotationAnimator.isRunning()) rotationAnimator.cancel();
+			stopAnimation(!cancelRunningAnimation);
 			animatorListener.setAnimationListener(animationListener);
 		}
 		rotationAnimator.setFloatValues(rotationDegrees);

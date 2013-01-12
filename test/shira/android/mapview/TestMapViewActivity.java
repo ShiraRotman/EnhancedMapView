@@ -61,7 +61,7 @@ public class TestMapViewActivity extends MapActivity
 				/*testMapTypeControl();
 				testZoomControl();
 				testRotationAnimation();*/
-				enhancedMapView.setMapControl(ControlType.PAN,null);
+				enhancedMapView.setMapControl(ControlType.ROTATE,null);
 			}
 		};
 		enhancedMapView.getViewTreeObserver().addOnGlobalLayoutListener(listener);
@@ -95,7 +95,7 @@ public class TestMapViewActivity extends MapActivity
 	
 	private void testChangeListener()
 	{
-		enhancedMapView.addChangeListener(new MapViewChangeListener() 
+		enhancedMapView.addChangeListener(new AbstractMapViewChangeListener() 
 		{	
 			@Override 
 			public void onZoom(EnhancedMapView mapView,int oldZoomLevel,

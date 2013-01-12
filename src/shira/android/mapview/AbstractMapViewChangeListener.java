@@ -12,6 +12,10 @@ public abstract class AbstractMapViewChangeListener implements
 	@Override public void onZoom(EnhancedMapView mapView,int oldZoomLevel,
 			int newZoomLevel) { }
 
+	@Override
+	public void onRotate(EnhancedMapView mapView,float oldDegrees,float 
+			newDegrees) { }
+	
 	@Override 
 	public void onTileChange(EnhancedMapView mapView,boolean isSatellite) { }
 }
