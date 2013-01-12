@@ -69,8 +69,11 @@ class DirectionPad extends View
 	
 	public static interface DirectionPadListener
 	{
+		public abstract void directionOperateStarted(DirectionPad directionPad,
+				int directionX,int directionY);
 		public abstract void directionOperated(DirectionPad directionPad,
 				int directionX,int directionY);
+		public abstract void directionOperateEnded(DirectionPad directionPad);
 	}
 	
 	private class DirectionOperateCallback implements Runnable
@@ -185,10 +188,14 @@ class DirectionPad extends View
 		switch (action)
 		{
 			case MotionEvent.ACTION_DOWN:
+				pointerID=event.getPointerId(0);
+				calcTouchAngleDirections(event);
+				invalidate();
+				for (DirectionPadListener listener:directionListeners)
+					listener.directionOperateStarted(this,directionX,directionY);
 				directionCallback.reset();
 				handler.postDelayed(directionCallback,TOUCH_REPEAT_TIME_ELAPSE);
-				pointerID=event.getPointerId(0);
-				//No break here on purpose
+				break;
 			case MotionEvent.ACTION_MOVE:
 				calcTouchAngleDirections(event);
 				invalidate();
@@ -199,6 +206,8 @@ class DirectionPad extends View
 				handler.removeCallbacks(directionCallback);
 				pointerID=-1;
 				invalidate();
+				for (DirectionPadListener listener:directionListeners)
+					listener.directionOperateEnded(this);
 				break;
 		}
 		return true;
@@ -317,7 +326,13 @@ class PanControlBuilder implements MapControlBuilder
 		{
 			DirectionPad.DirectionPadListener directionListener=new DirectionPad.
 					DirectionPadListener() 
-			{	
+			{
+				@Override
+				public void directionOperateStarted(DirectionPad directionPad,
+						int directionX,int directionY) { }
+				@Override
+				public void directionOperateEnded(DirectionPad directionPad) { }
+				
 				@Override
 				public void directionOperated(DirectionPad directionPad,
 						int directionX,int directionY) 

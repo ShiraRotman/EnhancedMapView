@@ -4,13 +4,17 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 
+import android.animation.ObjectAnimator;
+import android.animation.ValueAnimator;
 import android.content.Context;
 import android.graphics.*;
 //import android.util.FloatMath;
 //import android.util.Log;
+import android.util.Log;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.animation.LinearInterpolator;
 
 class DirectionPadHandle extends ViewGroup
 {
@@ -230,7 +234,8 @@ class RotateControlBuilder implements MapControlBuilder
 	private static final int CONTROL_HEIGHT=(int)(PanControlBuilder.CONTROL_HEIGHT/
 			(DirectionPadHandle.DIRECTION_CIRCLE_RATIO*DirectionPadHandle.
 			PAD_RADIUS_RATIO));
-	private static final float ROTATION_AMOUNT=2f;
+	//private static final float ROTATION_AMOUNT=2f;
+	private static final long ROTATION_DURATION=120000;
 	
 	private static int controlWidth;
 	private static int controlHeight;
@@ -239,21 +244,54 @@ class RotateControlBuilder implements MapControlBuilder
 			DirectionPadHandleListener
 	{
 		private MapRotationController rotationController;
+		private ObjectAnimator rotationAnimator;
+		private int direction;
 		
 		public DirectionPadHandleOperateListener(EnhancedMapView mapView)
-		{ rotationController=mapView.getRotationController(); }
+		{ 
+			rotationController=mapView.getRotationController();
+			rotationAnimator=new ObjectAnimator();
+			rotationAnimator.setTarget(rotationController);
+			rotationAnimator.setPropertyName("mapRotation");
+			rotationAnimator.setInterpolator(null);
+			Log.i("MapView","Frame: " + ValueAnimator.getFrameDelay());
+			ValueAnimator.setFrameDelay(24); //Not honored...
+			rotationAnimator.setDuration(ROTATION_DURATION);
+			rotationAnimator.setRepeatCount(ValueAnimator.INFINITE);
+			rotationAnimator.setRepeatMode(ValueAnimator.RESTART);
+		}
+		
+		@Override
+		public void directionOperateStarted(DirectionPad directionPad,int 
+				directionX,int directionY) 
+		{ direction=directionX; if (direction!=0) restartAnimation(); }
+
+		@Override public void directionOperateEnded(DirectionPad directionPad) 
+		{ if (rotationAnimator.isRunning()) rotationAnimator.cancel(); }
 		
 		@Override
 		public void directionOperated(DirectionPad directionPad,int directionX,
 				int directionY) 
 		{
-			if (directionX!=0)
+			Log.i("MapView","Current Angle: " + rotationAnimator.getAnimatedValue());
+			if (direction!=directionX)
 			{
-				float rotationDegrees=rotationController.getMapRotation()+
-						directionX*ROTATION_AMOUNT;
-				rotationController.animateRotation(rotationDegrees,(directionX>0),
-						null,100);
+				direction=directionX;
+				if (direction==0) rotationAnimator.cancel();
+				else restartAnimation();
 			}
+		}
+		
+		private void restartAnimation()
+		{
+			float startAnimationValue=rotationController.getMapRotation();
+			Log.i("MapView","Start Angle: " + startAnimationValue);
+			float endAnimationValue=startAnimationValue-direction*360;
+			Log.i("MapView","End Angle: " + endAnimationValue);
+			if (rotationAnimator.isRunning()) rotationAnimator.cancel();
+			rotationAnimator.setFloatValues(startAnimationValue,
+					endAnimationValue);
+			rotationAnimator.start();
 		}
 		
 		@Override
