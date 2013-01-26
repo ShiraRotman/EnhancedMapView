@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <declare-styleable name="ExtendedTabWidget">
+        <attr name="autoAdjustHeight" format="boolean"/>
+        <attr name="tabLabelsHeight" format="dimension"/>
+    </declare-styleable>
+</resources>

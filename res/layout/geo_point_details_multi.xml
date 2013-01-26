@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<shira.android.mapview.ExtendedTabHost android:id="@+id/extended_tab_host" 
+    xmlns:android="http://schemas.android.com/apk/res/android" 
+    xmlns:controls="http://schemas.android.com/apk/res/shira.android.mapview"
+	android:layout_width="@dimen/geo_point_details_width" 
+	android:layout_height="@dimen/geo_point_details_height">
+	<LinearLayout android:layout_width="match_parent" android:layout_height="match_parent"
+	    android:padding="5dp" android:orientation="vertical">
+	    <shira.android.mapview.ExtendedTabWidget android:id="@android:id/tabs" 
+	        android:layout_width="match_parent" android:layout_height="wrap_content"
+	        controls:tabLabelsHeight="30dp"/> <!-- android:gravity="top"/> -->
+	    <FrameLayout android:id="@android:id/tabcontent" android:layout_width="match_parent"
+	        android:layout_height="match_parent" android:padding="5dp"/>
+	</LinearLayout>
+</shira.android.mapview.ExtendedTabHost>

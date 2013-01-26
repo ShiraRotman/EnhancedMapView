@@ -6,6 +6,8 @@ import java.util.HashMap;
 import shira.android.mapview.EnhancedMapView.ControlAlignment;
 import shira.android.mapview.EnhancedMapView.ControlType;
 
+import android.app.AlertDialog;
+//import android.graphics.drawable.ColorDrawable;
 import android.os.Bundle;
 import android.util.Log;
 import android.view.View;
@@ -13,9 +15,11 @@ import android.view.View;
 import android.view.ViewTreeObserver;
 import android.widget.Button;
 import android.widget.FrameLayout;
+import android.widget.TextView;
 
 import com.google.android.maps.GeoPoint;
 import com.google.android.maps.MapActivity;
+//import com.google.android.maps.MapView;
 
 public class TestMapViewActivity extends MapActivity 
 {
@@ -61,7 +65,9 @@ public class TestMapViewActivity extends MapActivity
 				/*testMapTypeControl();
 				testZoomControl();
 				testRotationAnimation();*/
-				enhancedMapView.setMapControl(ControlType.ROTATE,null);
+				//enhancedMapView.setMapControl(ControlType.ROTATE,null);
+				//testGeoPointDetailsSingleView();
+				testGeoPointDetailsMultiView();
 			}
 		};
 		enhancedMapView.getViewTreeObserver().addOnGlobalLayoutListener(listener);
@@ -155,5 +161,41 @@ public class TestMapViewActivity extends MapActivity
 		properties.put(MapControlDefsUtils.CONTROL_STYLE_PROP_KEY,
 				MapControlDefsUtils.ZoomControlStyle.LARGE);
 		enhancedMapView.setMapControl(ControlType.ZOOM,properties);
+	}
+	
+	private void testGeoPointDetailsSingleView()
+	{
+		GeoPointDetailsView detailsView=new GeoPointDetailsView(this);
+		/*TextView contentView=new TextView(this);
+		contentView.setText("No tabs! Blalala");
+		contentView.setBackgroundResource(android.R.color.white);
+		detailsView.setDetailsView(contentView);
+		detailsView.setBackgroundResource(android.R.color.white);*/
+		detailsView.setTitle("Wonderful!");
+		detailsView.setSnippet("See for yourself!");
+		AlertDialog dialog=new AlertDialog.Builder(this).create();
+		dialog.setView(detailsView,0,0,0,0);
+		dialog.show();
+	}
+	
+	private void testGeoPointDetailsMultiView()
+	{
+		GeoPointDetailsView detailsView=new GeoPointDetailsView(this,true);
+		//detailsView.setCornerRadius(5);
+		detailsView.addDetailsTab("Test1","Details","Blablabla");
+		detailsView.addDetailsTab("Test2","Review","Excellent!",0);
+		/*AlertDialog.Builder builder=new AlertDialog.Builder(this,R.style.
+				BubbleDialog);*/
+		//AlertDialog dialog=builder.setView(detailsView).create();
+		/*View customContainer=dialog.findViewById(android.R.id.custom);
+		customContainer.setBackgroundColor(getResources().getColor(android.R.
+				color.transparent));*/
+		//dialog.getWindow().setBackgroundDrawableResource(R.drawable.bubble_dialog);
+		AlertDialog dialog=new AlertDialog.Builder(this).create();
+		//dialog.setContentView(detailsView);
+		/*ViewGroup.LayoutParams layoutParams=new ViewGroup.LayoutParams(100,100);
+		detailsView.setLayoutParams(layoutParams);*/
+		dialog.setView(detailsView,0,0,0,0);
+		dialog.show();
 	}
 }

@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+	android:layout_width="@dimen/geo_point_details_width" android:padding="10dp" 
+	android:layout_height="@dimen/geo_point_details_height" android:orientation="vertical">
+    <TextView android:id="@+id/title_text_view" android:layout_width="match_parent"
+    	android:layout_height="wrap_content" style="@style/GeoPointDetailsTitle"/>
+    <TextView android:id="@+id/snippet_text_view" android:layout_width="match_parent"
+        android:layout_height="0dp" android:layout_weight="1" android:layout_marginTop="15dp"
+        style="@style/GeoPointDetailsSnippet"/>
+</LinearLayout>
