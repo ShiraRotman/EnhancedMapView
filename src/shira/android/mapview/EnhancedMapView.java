@@ -207,6 +207,7 @@ public class EnhancedMapView extends MapView
 		controlBuilders.put(ControlType.ZOOM,new ZoomControlBuilder());
 		controlBuilders.put(ControlType.PAN,new PanControlBuilder());
 		controlBuilders.put(ControlType.ROTATE,new RotateControlBuilder());
+		controlBuilders.put(ControlType.STREET_VIEW,new StreetViewControlBuilder());
 	}
 	
 	public EnhancedMapView(Context context,String apiKey)
@@ -1135,7 +1136,7 @@ public class EnhancedMapView extends MapView
 				//The other cases requiring registration were addressed above
 				controlBuilder.registerListeners(this,createdControl);
 			}
-			activationManager.registerView(createdControl);
+			//activationManager.registerView(createdControl);
 			addView(createdControl,layoutParams);
 			//createdControl.requestLayout();
 			controlViewData.control=createdControl;

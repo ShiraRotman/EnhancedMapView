@@ -2,4 +2,6 @@
 <resources>
     <dimen name="geo_point_details_width">225dp</dimen>
     <dimen name="geo_point_details_height">350dp</dimen>
+    <dimen name="street_view_image_width">200dp</dimen>
+    <dimen name="street_view_image_height">325dp</dimen>
 </resources>

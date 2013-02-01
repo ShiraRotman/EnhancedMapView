@@ -1,8 +1,9 @@
 <resources xmlns:android="http://schemas.android.com/apk/res/android">
     <style name="AppTheme" parent="android:Theme.Light"/>
-    <!-- <style name="BubbleDialog" parent="@android:style/Theme.Dialog">
+    <style name="ProgressDialog" parent="@android:style/Theme.Dialog">
     	<item name="android:windowBackground">@android:color/transparent</item>
-    </style> -->
+    	<item name="android:backgroundDimEnabled">false</item>
+    </style>
     <style name="GeoPointDetailsTitle">
     	<item name="android:typeface">serif</item>
     	<item name="android:textStyle">bold</item>

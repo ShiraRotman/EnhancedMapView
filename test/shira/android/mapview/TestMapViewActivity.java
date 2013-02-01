@@ -15,7 +15,7 @@ import android.view.View;
 import android.view.ViewTreeObserver;
 import android.widget.Button;
 import android.widget.FrameLayout;
-import android.widget.TextView;
+//import android.widget.TextView;
 
 import com.google.android.maps.GeoPoint;
 import com.google.android.maps.MapActivity;
@@ -62,12 +62,13 @@ public class TestMapViewActivity extends MapActivity
 			{
 				enhancedMapView.getViewTreeObserver().removeGlobalOnLayoutListener(
 						this);
-				/*testMapTypeControl();
+				//testMapTypeControl();
 				testZoomControl();
-				testRotationAnimation();*/
-				//enhancedMapView.setMapControl(ControlType.ROTATE,null);
+				//testRotationAnimation();
+				enhancedMapView.setMapControl(ControlType.ROTATE,null);
 				//testGeoPointDetailsSingleView();
-				testGeoPointDetailsMultiView();
+				//testGeoPointDetailsMultiView();
+				enhancedMapView.setMapControl(ControlType.STREET_VIEW,null);
 			}
 		};
 		enhancedMapView.getViewTreeObserver().addOnGlobalLayoutListener(listener);
