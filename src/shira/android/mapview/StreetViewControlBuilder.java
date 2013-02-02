@@ -360,6 +360,29 @@ class StreetViewControlBuilder implements MapControlBuilder
 		}
 	}
 	
+	/*For adapting the control to the activation mechanism since it overrides 
+	 *the touch listeners of the registered views*/
+	private static class TouchableImageView extends ImageView
+	{
+		private OnTouchListener secondaryTouchListener;
+		
+		public TouchableImageView(Context context) { super(context); }
+		
+		/*public OnTouchListener getSecondaryOnTouchListener() 
+		{ return secondaryTouchListener; }*/
+		
+		public void setSecondaryOnTouchListener(OnTouchListener listener)
+		{ this.secondaryTouchListener=listener; }
+		
+		@Override public boolean onTouchEvent(MotionEvent event)
+		{
+			if ((secondaryTouchListener!=null)&&(secondaryTouchListener.onTouch(
+					this,event)))
+				return true;
+			else return super.onTouchEvent(event);
+		}
+	}
+	
 	@Override
 	public View buildControl(Map<String,Object> properties,View existingControl,
 			EnhancedMapView mapView)
@@ -370,22 +393,23 @@ class StreetViewControlBuilder implements MapControlBuilder
 			streetViewIcon=BitmapFactory.decodeResource(context.getResources(),
 					R.drawable.street_view);
 		}
-		ImageView control;
-		if (existingControl instanceof ImageView) 
-			control=(ImageView)existingControl;
-		else control=new ImageView(context);
+		TouchableImageView control;
+		if (existingControl instanceof TouchableImageView) 
+			control=(TouchableImageView)existingControl;
+		else control=new TouchableImageView(context);
 		control.setImageBitmap(streetViewIcon);
 		return control;
 	}
 	
 	@Override public void registerListeners(EnhancedMapView mapView,View control)
 	{
-		if ((control instanceof ImageView)&&(control.getTag(R.id.
+		if ((control instanceof TouchableImageView)&&(control.getTag(R.id.
 				control_listener)==null))
 		{
 			StreetViewDragDropHandler streetViewListener=new StreetViewDragDropHandler(
 					control,mapView);
-			control.setOnTouchListener(streetViewListener);
+			((TouchableImageView)control).setSecondaryOnTouchListener(
+					streetViewListener);
 			control.setTag(R.id.control_listener,streetViewListener);
 		}
 	}

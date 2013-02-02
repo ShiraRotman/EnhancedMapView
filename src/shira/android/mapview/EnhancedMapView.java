@@ -1136,7 +1136,7 @@ public class EnhancedMapView extends MapView
 				//The other cases requiring registration were addressed above
 				controlBuilder.registerListeners(this,createdControl);
 			}
-			//activationManager.registerView(createdControl);
+			activationManager.registerView(createdControl);
 			addView(createdControl,layoutParams);
 			//createdControl.requestLayout();
 			controlViewData.control=createdControl;
